@@ -7,10 +7,12 @@ depende da janela (idade).
 
 from __future__ import annotations
 
+import csv
 import logging
 import re
 from collections.abc import Iterable, Mapping
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
@@ -26,6 +28,12 @@ PARAMETROS_CONTRIBUIDORES = {"per_page": 1, "anon": "true"}
 # Erro 403 da API em repositórios com histórico grande demais (ex.: torvalds/linux)
 MENSAGEM_LISTA_GRANDE = "too large to list contributors"
 INTERVALO_PROGRESSO = 100  # a cada quantos repositórios logar o progresso
+ARQUIVO_REPOS = "repos.csv"
+# Contrato 5.2 (Repo) + idade_dias; contributors vazio = desconhecido
+COLUNAS_REPOS = (
+    "full_name", "default_branch", "stars", "language", "created_at",
+    "contributors", "fork", "archived", "idade_dias",
+)
 
 _LINK = re.compile(r"<([^>]*)>([^<]*)")
 _PARAMETRO = re.compile(r';\s*([\w-]+)\s*=\s*("[^"]*"|[^;,\s]*)')
@@ -160,3 +168,20 @@ def _texto_do_erro(erro: Exception) -> str:
     """Mensagem da exceção + corpo da resposta anexada (como em requests.HTTPError)."""
     resposta = getattr(erro, "response", None)
     return f"{erro} {getattr(resposta, 'text', '') or ''}"
+
+
+# --- disco ----------------------------------------------------------------------
+
+
+def salvar_repos(repos: Iterable[dict], dir_saida: Path) -> Path:
+    """Escreve `repos.csv` em dir_saida (datas em ISO 8601 UTC; idade em dias); devolve o caminho."""
+    dir_saida = Path(dir_saida)
+    dir_saida.mkdir(parents=True, exist_ok=True)
+    caminho = dir_saida / ARQUIVO_REPOS
+    with caminho.open("w", encoding="utf-8", newline="") as f:
+        escritor = csv.DictWriter(f, fieldnames=COLUNAS_REPOS, extrasaction="ignore")
+        escritor.writeheader()
+        for repo in repos:
+            escritor.writerow(repo | {"created_at": repo["created_at"].isoformat()})
+    log.info("metadados salvos em %s", caminho)
+    return caminho

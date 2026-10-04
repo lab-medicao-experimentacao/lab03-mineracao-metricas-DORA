@@ -1,3 +1,4 @@
+import csv
 import json
 import logging
 from dataclasses import dataclass, field
@@ -7,12 +8,14 @@ from pathlib import Path
 import pytest
 
 from pipeline.metadados import (
+    COLUNAS_REPOS,
     PARAMETROS_CONTRIBUIDORES,
     coletar_contribuidores,
     contar_contribuidores,
     enriquecer_metadados,
     extrair_links,
     idade_dias,
+    salvar_repos,
     ultima_pagina,
 )
 from pipeline.config import Janela
@@ -399,3 +402,50 @@ def test_enriquecer_loga_progresso(caplog, monkeypatch):
     with caplog.at_level(logging.INFO, logger="pipeline.metadados"):
         enriquecer_metadados(cliente_com_fixtures(), [repo("psf/requests")], JANELA)
     assert any("1 repositórios processados" in r.getMessage() for r in caplog.records)
+
+
+# --- disco --------------------------------------------------------------------------
+
+
+def ler_csv(caminho: Path) -> list[dict]:
+    with caminho.open(encoding="utf-8", newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def test_colunas_seguem_o_contrato_5_2_mais_idade():
+    assert COLUNAS_REPOS == (
+        "full_name", "default_branch", "stars", "language", "created_at",
+        "contributors", "fork", "archived", "idade_dias",
+    )
+
+
+def test_salvar_repos_escreve_csv(tmp_path):
+    repos = enriquecer_metadados(
+        cliente_com_fixtures(),
+        [repo("psf/requests"), repo("torvalds/linux") | {"language": None, "archived": True}],
+        JANELA,
+    )
+    caminho = salvar_repos(repos, tmp_path / "output")
+
+    assert caminho == tmp_path / "output" / "repos.csv"
+    linhas = ler_csv(caminho)
+    assert list(linhas[0]) == list(COLUNAS_REPOS)
+    assert linhas[0] == {
+        "full_name": "psf/requests", "default_branch": "main", "stars": "1200",
+        "language": "Python", "created_at": "2020-01-01T00:00:00+00:00",
+        "contributors": "795", "fork": "False", "archived": "False", "idade_dias": "2465",
+    }
+    assert linhas[1]["contributors"] == ""  # desconhecido (lista grande demais)
+    assert linhas[1]["language"] == ""
+    assert linhas[1]["archived"] == "True"
+
+
+def test_salvar_repos_ignora_chaves_extras(tmp_path):
+    registro = repo("a/b") | {"contributors": 2, "idade_dias": 10, "extra": "x"}
+    linhas = ler_csv(salvar_repos([registro], tmp_path))
+    assert "extra" not in linhas[0]
+
+
+def test_salvar_repos_sem_registros_escreve_so_cabecalho(tmp_path):
+    caminho = salvar_repos([], tmp_path)
+    assert caminho.read_text(encoding="utf-8").strip() == ",".join(COLUNAS_REPOS)
