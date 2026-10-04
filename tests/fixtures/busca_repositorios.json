@@ -1,0 +1,69 @@
+{
+  "total_count": 4,
+  "incomplete_results": false,
+  "items": [
+    {
+      "id": 65388917,
+      "name": "PythonDataScienceHandbook",
+      "full_name": "jakevdp/PythonDataScienceHandbook",
+      "private": false,
+      "owner": {
+        "login": "jakevdp",
+        "type": "User"
+      },
+      "html_url": "https://github.com/jakevdp/PythonDataScienceHandbook",
+      "fork": false,
+      "created_at": "2016-08-10T14:24:36Z",
+      "updated_at": "2026-10-04T17:39:07Z",
+      "pushed_at": "2024-06-26T19:17:33Z",
+      "stargazers_count": 50088,
+      "language": "Jupyter Notebook",
+      "archived": false,
+      "default_branch": "master",
+      "visibility": "public",
+      "score": 1.0
+    },
+    {
+      "id": 50264296,
+      "name": "bulma",
+      "full_name": "jgthms/bulma",
+      "private": false,
+      "owner": {
+        "login": "jgthms",
+        "type": "User"
+      },
+      "html_url": "https://github.com/jgthms/bulma",
+      "fork": false,
+      "created_at": "2016-01-23T23:48:34Z",
+      "updated_at": "2026-10-04T20:04:28Z",
+      "pushed_at": "2026-09-21T09:56:34Z",
+      "stargazers_count": 50054,
+      "language": "CSS",
+      "archived": false,
+      "default_branch": "main",
+      "visibility": "public",
+      "score": 1.0
+    },
+    {
+      "id": 896924279,
+      "name": "airi",
+      "full_name": "moeru-ai/airi",
+      "private": false,
+      "owner": {
+        "login": "moeru-ai",
+        "type": "Organization"
+      },
+      "html_url": "https://github.com/moeru-ai/airi",
+      "fork": false,
+      "created_at": "2024-12-01T16:33:36Z",
+      "updated_at": "2026-10-04T21:16:16Z",
+      "pushed_at": "2026-10-04T21:37:42Z",
+      "stargazers_count": 50029,
+      "language": "TypeScript",
+      "archived": false,
+      "default_branch": "main",
+      "visibility": "public",
+      "score": 1.0
+    }
+  ]
+}
