@@ -40,6 +40,9 @@ def main(argv: list[str] | None = None) -> int:
     # TODO(#2, #5): ligar a seleção quando o GitHubClient (#2) existir:
     #   repos = selecao.buscar_candidatos(cliente, config.faixas_estrelas)
     #   selecao.salvar_candidatos(repos, config.dir_saida)
+    # TODO(#5): metadados só para o subconjunto que o funil escolher (1 requisição/repo):
+    #   amostra = metadados.enriquecer_metadados(cliente, elegiveis, config.janela)
+    #   metadados.salvar_repos(amostra, config.dir_saida)
     log.info("nenhuma etapa de coleta integrada ainda")
     return 0
 
