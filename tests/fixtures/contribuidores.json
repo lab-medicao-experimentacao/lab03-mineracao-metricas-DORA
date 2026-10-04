@@ -1,0 +1,45 @@
+{
+  "_origem": "GET /repos/{full_name}/contributors?per_page=1&anon=true, capturado em 2026-10-04. Só status, cabeçalho Link e corpo; corpos aparados e dados pessoais do contribuidor anônimo substituídos.",
+  "psf/requests": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Link": "<https://api.github.com/repositories/1362490/contributors?per_page=1&anon=true&page=2>; rel=\"next\", <https://api.github.com/repositories/1362490/contributors?per_page=1&anon=true&page=795>; rel=\"last\""
+    },
+    "json": [
+      {
+        "email": "anonimo@example.com",
+        "name": "Contribuidor Anonimo",
+        "type": "Anonymous",
+        "contributions": 2141
+      }
+    ]
+  },
+  "octocat/Hello-World": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Link": "<https://api.github.com/repositories/1296269/contributors?per_page=1&anon=true&page=2>; rel=\"next\", <https://api.github.com/repositories/1296269/contributors?per_page=1&anon=true&page=3>; rel=\"last\""
+    },
+    "json": [
+      {
+        "login": "Spaceghost",
+        "id": 251370,
+        "type": "User",
+        "site_admin": false,
+        "contributions": 1
+      }
+    ]
+  },
+  "torvalds/linux": {
+    "status": 403,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8"
+    },
+    "json": {
+      "message": "The history or contributor list is too large to list contributors for this repository via the API.",
+      "documentation_url": "https://docs.github.com/rest/repos/repos#list-repository-contributors",
+      "status": "403"
+    }
+  }
+}

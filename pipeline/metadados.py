@@ -9,9 +9,20 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from pipeline.selecao import ClienteGitHub, corpo_json
+
 log = logging.getLogger(__name__)
+
+CAMINHO_CONTRIBUIDORES = "/repos/{full_name}/contributors"
+# per_page=1: o nº da última página no Link é o nº de contribuidores; anon=true inclui
+# autores sem conta no GitHub (identificados só pelo e-mail dos commits).
+PARAMETROS_CONTRIBUIDORES = {"per_page": 1, "anon": "true"}
+# Erro 403 da API em repositórios com histórico grande demais (ex.: torvalds/linux)
+MENSAGEM_LISTA_GRANDE = "too large to list contributors"
 
 _LINK = re.compile(r"<([^>]*)>([^<]*)")
 _PARAMETRO = re.compile(r';\s*([\w-]+)\s*=\s*("[^"]*"|[^;,\s]*)')
@@ -41,3 +52,71 @@ def ultima_pagina(cabecalho: str | None) -> int | None:
     if not valores or not valores[0].isdigit() or int(valores[0]) < 1:
         return None
     return int(valores[0])
+
+
+def contar_contribuidores(corpo: Any, headers: Mapping[str, str] | None) -> int | None:
+    """Nº de contribuidores (inclui anônimos) de uma resposta com `per_page=1`.
+
+    Usa a página `rel="last"` do Link; sem Link, conta os itens (0 ou 1). Corpo vazio
+    (repositório vazio, HTTP 204) → 0. Corpo de erro (dict com `message`, ex.: lista
+    grande demais) ou inesperado → None ("desconhecido", nunca 0 por padrão).
+    """
+    if corpo is None or corpo == "" or corpo == []:
+        return 0
+    if not isinstance(corpo, list):
+        return None
+    ultima = ultima_pagina(_cabecalho(headers, "Link"))
+    return ultima if ultima is not None else len(corpo)
+
+
+def _cabecalho(headers: Mapping[str, str] | None, nome: str) -> str | None:
+    """Busca de cabeçalho sem diferenciar maiúsculas (dict comum ou CaseInsensitiveDict)."""
+    for chave, valor in (headers or {}).items():
+        if chave.lower() == nome.lower():
+            return valor
+    return None
+
+
+# --- coleta (rede, via cliente) -------------------------------------------------
+
+
+def coletar_contribuidores(cliente: ClienteGitHub, full_name: str) -> int | None:
+    """Nº de contribuidores de um repositório com 1 requisição; None se a API não souber dizer.
+
+    "Lista grande demais" (403) vira None com aviso, venha como corpo de erro ou como
+    exceção do cliente; qualquer outra exceção (rate limit, 5xx, rede) é propagada.
+    """
+    caminho = CAMINHO_CONTRIBUIDORES.format(full_name=full_name)
+    try:
+        resposta = cliente.get(caminho, dict(PARAMETROS_CONTRIBUIDORES))
+    except Exception as erro:
+        if MENSAGEM_LISTA_GRANDE not in _texto_do_erro(erro):
+            raise
+        log.warning("%s: contribuidores desconhecidos (lista grande demais para a API: %s)", full_name, erro)
+        return None
+
+    corpo = _ler_corpo(resposta)
+    total = contar_contribuidores(corpo, getattr(resposta, "headers", None))
+    if total is None:
+        mensagem = corpo.get("message") if isinstance(corpo, dict) else repr(corpo)[:200]
+        log.warning("%s: contribuidores desconhecidos (%s)", full_name, mensagem)
+    return total
+
+
+def _ler_corpo(resposta: Any) -> Any:
+    """Corpo JSON; None para HTTP 204 / corpo vazio (o .json() do requests falha nesse caso)."""
+    if getattr(resposta, "status_code", None) == 204:
+        return None
+    try:
+        return corpo_json(resposta)
+    except ValueError:
+        conteudo = getattr(resposta, "content", None)
+        if conteudo is not None and not conteudo.strip():
+            return None
+        raise
+
+
+def _texto_do_erro(erro: Exception) -> str:
+    """Mensagem da exceção + corpo da resposta anexada (como em requests.HTTPError)."""
+    resposta = getattr(erro, "response", None)
+    return f"{erro} {getattr(resposta, 'text', '') or ''}"
