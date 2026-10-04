@@ -37,6 +37,9 @@ def main(argv: list[str] | None = None) -> int:
     # Etapas do pipeline, conectadas conforme as Issues forem integradas:
     #   seleção (#3) → metadados (#4) → releases (#7) → commits (#8)
     #   → workflow runs (#9) → funil e amostra (#5)
+    # TODO(#2, #5): ligar a seleção quando o GitHubClient (#2) existir:
+    #   repos = selecao.buscar_candidatos(cliente, config.faixas_estrelas)
+    #   selecao.salvar_candidatos(repos, config.dir_saida)
     log.info("nenhuma etapa de coleta integrada ainda")
     return 0
 
