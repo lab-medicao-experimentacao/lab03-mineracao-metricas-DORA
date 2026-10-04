@@ -34,6 +34,10 @@
 | Forks na busca: a Search API **omite forks por padrão** (só aparecem com `fork:true`) | Hoje a consulta é só `stars:A..B` → a etapa “sem fork” do funil tende a descartar 0. Proposta: decidir se adicionamos `fork:true` à consulta para o funil registrar os forks | A (#3) — validar com o grupo |
 | `Response.json` no contrato 5.1: atributo ou método? | `pipeline/selecao.py` aceita os dois; C (#2) define | C (#2) |
 | Classificação geral com métrica sem valor (`None`) | Ignorar a métrica e tirar a mediana das restantes; `None` se nenhuma tiver valor | A (#6) — validar com o grupo |
+| Contribuidores quando a API não lista (403 “contributor list is too large”, ex.: `torvalds/linux`) | `contributors = None` (célula vazia em `repos.csv`) + aviso no log; o contrato 5.2 diz `int` → proposta: `int \| None`. Na RQ06 esses repositórios ficam fora dos quartis de contribuidores | A (#4) — validar com o grupo |
+| Como o `GitHubClient` (#2) sinaliza HTTP 403/204 | `pipeline/metadados.py` aceita erro como corpo (`{"message": ...}`) ou como exceção com o texto da API (em `str(e)` ou `e.response.text`); 204/corpo vazio → 0 contribuidores. Ajustar quando #2 definir suas exceções | A (#4) / C (#2) |
+| Idade do repositório (`idade_dias`) | `(janela.fim − created_at)` em dias inteiros, arredondado para baixo, com `janela.fim` **exclusivo** (00:00 UTC do dia seguinte ao último dia da janela) — 1 dia a mais que usar o último dia às 00:00 | A (#4) — validar com o grupo |
+| Contribuidores com `anon=true` | Conta também autores sem conta no GitHub (só e-mail); o mesmo autor com e-mails diferentes conta mais de uma vez | A (#4) — enunciado manda `anon=true` |
 
 Enquanto a janela não for divulgada, use em desenvolvimento `2025-10-01` a `2026-09-30` **apenas em `config.yaml`** — nunca hard-coded.
 
