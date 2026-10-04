@@ -41,6 +41,14 @@ class ClienteGitHub(Protocol):
 # --- transformação (pura) -------------------------------------------------------
 
 
+def corpo_json(resposta: Any) -> Any:
+    """Corpo JSON de uma resposta do cliente (dict ou list).
+
+    O contrato 5.1 define `.json` como atributo; aceita também o método do requests.Response.
+    """
+    return resposta.json() if callable(resposta.json) else resposta.json
+
+
 def converter_item(item: dict) -> dict:
     """Item da Search API → registro Repo (contrato 5.2) sem `contributors`."""
     return {
@@ -127,9 +135,7 @@ def _parametros(faixa: FaixaEstrelas, por_pagina: int) -> dict:
 
 
 def _consultar(cliente: ClienteGitHub, faixa: FaixaEstrelas, por_pagina: int) -> dict:
-    resposta = cliente.get(CAMINHO_BUSCA, _parametros(faixa, por_pagina))
-    # O contrato 5.1 define `.json` como atributo; aceita também o método do requests.Response.
-    corpo = resposta.json() if callable(resposta.json) else resposta.json
+    corpo = corpo_json(cliente.get(CAMINHO_BUSCA, _parametros(faixa, por_pagina)))
     if corpo.get("incomplete_results"):
         log.warning("%s: a API sinalizou incomplete_results (timeout da busca)", faixa.consulta())
     return corpo

@@ -15,6 +15,7 @@ from pipeline.selecao import (
     TETO_BUSCA,
     buscar_candidatos,
     converter_item,
+    corpo_json,
     deduplicar,
     fatiar_faixa,
     salvar_candidatos,
@@ -121,6 +122,15 @@ def test_created_at_e_datetime_utc():
 
 def test_linguagem_ausente_vira_none():
     assert converter_item(item("a/b", 10) | {"language": None})["language"] is None
+
+
+def test_corpo_json_aceita_atributo_e_metodo():
+    class ComMetodo:
+        def json(self):
+            return [1]
+
+    assert corpo_json(Resposta(json={"a": 1})) == {"a": 1}
+    assert corpo_json(ComMetodo()) == [1]
 
 
 def test_deduplicar_mantem_primeira_ocorrencia():
