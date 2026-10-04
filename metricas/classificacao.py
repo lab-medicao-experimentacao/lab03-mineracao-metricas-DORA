@@ -20,23 +20,37 @@ HORA = 1.0
 DIA = 24 * HORA
 SEMANA = 7 * DIA
 
+# Cortes da tabela de referência (enunciado, RQ 07), do melhor para o pior desempenho.
+FREQUENCIA_ELITE = 7.0                   # ≥ 7 releases/semana
+FREQUENCIA_HIGH = 1.0                    # ≥ 1 release/semana
+FREQUENCIA_MEDIUM = UMA_POR_MES_EM_SEMANAS
+LEAD_TIME_ELITE = DIA                    # < 1 dia
+LEAD_TIME_HIGH = SEMANA                  # < 1 semana
+LEAD_TIME_MEDIUM = 30 * DIA              # < 30 dias
+CFR_ELITE = 0.15                         # ≤ 15 %
+CFR_HIGH = 0.30                          # ≤ 30 %
+CFR_MEDIUM = 0.45                        # ≤ 45 %
+RECUPERACAO_ELITE = HORA                 # < 1 hora
+RECUPERACAO_HIGH = DIA                   # < 1 dia
+RECUPERACAO_MEDIUM = SEMANA              # < 1 semana
+
 
 def _frequencia(valor: float) -> str:
-    if valor >= 7:
+    if valor >= FREQUENCIA_ELITE:
         return "Elite"
-    if valor >= 1:
+    if valor >= FREQUENCIA_HIGH:
         return "High"
-    if valor >= UMA_POR_MES_EM_SEMANAS:
+    if valor >= FREQUENCIA_MEDIUM:
         return "Medium"
     return "Low"
 
 
 def _lead_time(horas: float) -> str:
-    if horas < DIA:
+    if horas < LEAD_TIME_ELITE:
         return "Elite"
-    if horas < SEMANA:
+    if horas < LEAD_TIME_HIGH:
         return "High"
-    if horas < 30 * DIA:
+    if horas < LEAD_TIME_MEDIUM:
         return "Medium"
     return "Low"
 
@@ -44,21 +58,21 @@ def _lead_time(horas: float) -> str:
 def _cfr(fracao: float) -> str:
     if fracao > 1:
         raise ValueError(f"CFR deve estar entre 0 e 1, recebido {fracao}")
-    if fracao <= 0.15:
+    if fracao <= CFR_ELITE:
         return "Elite"
-    if fracao <= 0.30:
+    if fracao <= CFR_HIGH:
         return "High"
-    if fracao <= 0.45:
+    if fracao <= CFR_MEDIUM:
         return "Medium"
     return "Low"
 
 
 def _recuperacao(horas: float) -> str:
-    if horas < HORA:
+    if horas < RECUPERACAO_ELITE:
         return "Elite"
-    if horas < DIA:
+    if horas < RECUPERACAO_HIGH:
         return "High"
-    if horas < SEMANA:
+    if horas < RECUPERACAO_MEDIUM:
         return "Medium"
     return "Low"
 
@@ -72,11 +86,16 @@ _CLASSIFICADORES = {
 
 
 def classificar_metrica(nome: str, valor: float | None) -> str | None:
-    """Categoria DORA de uma métrica; None quando o valor não pôde ser calculado."""
+    """Categoria DORA de uma métrica; None quando o valor não pôde ser calculado.
+
+    NaN (valor ausente vindo do pandas) é tratado como None.
+    """
     if nome not in _CLASSIFICADORES:
         raise ValueError(f"métrica desconhecida: {nome!r}; use uma de {sorted(_CLASSIFICADORES)}")
-    if valor is None:
+    if valor is None or math.isnan(valor):
         return None
+    if math.isinf(valor):
+        raise ValueError(f"valor infinito para {nome}: {valor}")
     if valor < 0:
         raise ValueError(f"valor negativo para {nome}: {valor}")
     return _CLASSIFICADORES[nome](valor)

@@ -28,8 +28,8 @@ def test_frequencia(valor, esperado):
     assert classificar_metrica("frequencia", valor) == esperado
 
 
-def test_uma_por_mes_equivale_a_cerca_de_0_23_por_semana():
-    assert UMA_POR_MES_EM_SEMANAS == pytest.approx(0.23, abs=0.001)
+def test_uma_por_mes_equivale_a_12_releases_em_um_ano_medio():
+    assert UMA_POR_MES_EM_SEMANAS == pytest.approx(12 * 7 / 365.25)
 
 
 @pytest.mark.parametrize(
@@ -84,6 +84,24 @@ def test_recuperacao(horas, esperado):
 
 def test_valor_ausente_nao_tem_categoria():
     assert classificar_metrica("lead_time", None) is None
+
+
+@pytest.mark.parametrize("nome", ["frequencia", "lead_time", "cfr", "recuperacao"])
+def test_nan_e_tratado_como_valor_ausente(nome):
+    # pandas representa valor ausente como NaN ao ler CSV (S03)
+    assert classificar_metrica(nome, float("nan")) is None
+
+
+@pytest.mark.parametrize("nome", ["frequencia", "lead_time", "cfr", "recuperacao"])
+def test_valor_infinito_gera_erro(nome):
+    with pytest.raises(ValueError):
+        classificar_metrica(nome, float("inf"))
+
+
+def test_classificar_repositorio_com_nan_nao_vira_low():
+    nan = float("nan")
+    resultado = classificar_repositorio(nan, nan, nan, nan)
+    assert set(resultado.values()) == {None}
 
 
 def test_metrica_desconhecida_gera_erro():
