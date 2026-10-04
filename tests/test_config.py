@@ -50,11 +50,30 @@ def test_consulta_da_faixa_de_estrelas(faixa, esperado):
         {"{min: 1000, max: 1999}": "{min: 1000, max: 900}"},        # max < min
         {"min_runs: 50": "min_runs: 0"},                            # limite não positivo
         {"  semente: 42\n": ""},                                    # chave obrigatória ausente
+        {"fim: 2026-09-30": "fim: 2026-02-30"},                     # data impossível (erro no PyYAML)
+        {"janela:": "janela: [\n"},                                 # YAML inválido
+        {"  inicio: 2025-10-01\n  fim: 2026-09-30\n": ""},          # seção vazia (não é mapeamento)
+        {"min_releases: 5": "min_releases: cinco"},                 # inteiro inválido
+        {"min_releases: 5": "min_releases: 5.5"},                   # inteiro não exato
+        {"semente: 42": "semente: true"},                           # booleano no lugar de inteiro
+        {"excluir_forks: true": "excluir_forks: 'false'"},          # string no lugar de booleano
+        {"{min: 2000, max: null}": "{min: 2500, max: null}"},       # lacuna entre faixas
+        {"{min: 2000, max: null}": "{min: 2000}"},                  # max ausente (use null explícito)
+        {"{min: 1000, max: 1999}": "{min: -1, max: 1999}"},         # min negativo
+        {"    - {min: 1000, max: 1999}\n    - {min: 2000, max: null}\n": ""},  # lista de faixas nula
+        {"  faixas_estrelas:\n    - {min: 1000, max: 1999}\n    - {min: 2000, max: null}\n": "  faixas_estrelas: []\n"},  # lista vazia
     ],
 )
 def test_config_invalido_gera_erro(escrever_config, substituicoes):
     with pytest.raises(ErroConfiguracao):
         carregar_config(escrever_config(substituicoes))
+
+
+def test_config_que_nao_e_mapeamento_gera_erro(tmp_path):
+    caminho = tmp_path / "config.yaml"
+    caminho.write_text("- uma\n- lista\n", encoding="utf-8")
+    with pytest.raises(ErroConfiguracao):
+        carregar_config(caminho)
 
 
 def test_arquivo_inexistente_gera_erro(tmp_path):
