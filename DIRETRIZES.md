@@ -31,6 +31,8 @@
 | Formato do cache | Proposta: **um JSON por requisição** em `data/cache/` | C |
 | Semente aleatória | `42` (em `config.yaml`, usada em todo sorteio) | Grupo |
 | “1 deploy por mês” em releases/semana | `12 ÷ (365,25 / 7) ≈ 0,23` (`metricas/classificacao.py`) | A (#6) |
+| Forks na busca: a Search API **omite forks por padrão** (só aparecem com `fork:true`) | Hoje a consulta é só `stars:A..B` → a etapa “sem fork” do funil tende a descartar 0. Proposta: decidir se adicionamos `fork:true` à consulta para o funil registrar os forks | A (#3) — validar com o grupo |
+| `Response.json` no contrato 5.1: atributo ou método? | `pipeline/selecao.py` aceita os dois; C (#2) define | C (#2) |
 | Classificação geral com métrica sem valor (`None`) | Ignorar a métrica e tirar a mediana das restantes; `None` se nenhuma tiver valor | A (#6) — validar com o grupo |
 
 Enquanto a janela não for divulgada, use em desenvolvimento `2025-10-01` a `2026-09-30` **apenas em `config.yaml`** — nunca hard-coded.
