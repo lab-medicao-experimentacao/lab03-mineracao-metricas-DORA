@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Lab03 — dados coletados (cache da API e intermediários) não são versionados
+data/**
+!data/**/
+!data/**/.gitkeep

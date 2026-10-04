@@ -1,0 +1,35 @@
+# Configuração do pipeline — ver DIRETRIZES.md, seções 1 e 4.
+
+janela:
+  # PROVISÓRIO: as datas oficiais serão fixadas pelo professor na abertura do Lab03S01.
+  # Intervalo fechado em dias: [inicio 00:00 UTC, fim 23:59:59 UTC].
+  inicio: 2025-10-01
+  fim: 2026-09-30
+
+selecao:
+  # Faixas de estrelas para fatiar a busca (teto de 1.000 resultados por consulta).
+  # max: null = sem limite superior. Faixas que excederem 1.000 resultados são subdivididas (#3).
+  faixas_estrelas:
+    - {min: 1000, max: 1499}
+    - {min: 1500, max: 1999}
+    - {min: 2000, max: 2999}
+    - {min: 3000, max: 4999}
+    - {min: 5000, max: 9999}
+    - {min: 10000, max: 19999}
+    - {min: 20000, max: 49999}
+    - {min: 50000, max: null}
+  excluir_forks: true
+  excluir_arquivados: true
+
+inclusao:
+  min_releases: 5
+  min_runs: 50
+
+amostra:
+  tamanho: 100
+  semente: 42
+
+caminhos:
+  cache: data/cache
+  processados: data/processed
+  saida: output
