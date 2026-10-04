@@ -1,6 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -9,11 +10,17 @@ from pipeline.metadados import (
     PARAMETROS_CONTRIBUIDORES,
     coletar_contribuidores,
     contar_contribuidores,
+    enriquecer_metadados,
     extrair_links,
+    idade_dias,
     ultima_pagina,
 )
+from pipeline.config import Janela
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "contribuidores.json"
+UTC = timezone.utc
+# Como o config.py monta a janela 2025-10-01..2026-09-30: fim exclusivo = 00:00 de 01/10/2026
+JANELA = Janela(inicio=datetime(2025, 10, 1, tzinfo=UTC), fim=datetime(2026, 10, 1, tzinfo=UTC))
 
 # Cabeçalho real de GET /repos/psf/requests/contributors?per_page=1&anon=true
 LINK_REAL = (
@@ -303,3 +310,92 @@ def test_coleta_erro_nao_listavel_vira_none_com_aviso(caplog):
     with caplog.at_level(logging.WARNING, logger="pipeline.metadados"):
         assert coletar_contribuidores(cliente, "a/sumiu") is None
     assert any("Not Found" in r.getMessage() for r in caplog.records)
+
+
+# --- idade (pura) -------------------------------------------------------------------
+
+
+def test_idade_em_dias_inteiros_ate_o_fim_da_janela():
+    assert idade_dias(datetime(2025, 10, 1, tzinfo=UTC), JANELA.fim) == 365
+
+
+def test_idade_arredonda_dia_parcial_para_baixo():
+    assert idade_dias(datetime(2026, 9, 29, 12, 0, tzinfo=UTC), JANELA.fim) == 1
+    assert idade_dias(datetime(2026, 9, 30, 0, 0, 1, tzinfo=UTC), JANELA.fim) == 0
+
+
+def test_idade_conta_o_ultimo_dia_da_janela_inteiro():
+    """fim é exclusivo (00:00 do dia seguinte): criado às 00:00 do último dia → 1 dia."""
+    assert idade_dias(datetime(2026, 9, 30, tzinfo=UTC), JANELA.fim) == 1
+
+
+def test_idade_com_fixture_real():
+    criado = datetime(2016, 8, 10, 14, 24, 36, tzinfo=UTC)  # jakevdp/PythonDataScienceHandbook
+    assert idade_dias(criado, JANELA.fim) == 3703
+
+
+def test_idade_negativa_se_criado_depois_da_janela():
+    """A busca não filtra por data de criação; o valor não é truncado (o funil decide)."""
+    assert idade_dias(datetime(2026, 10, 3, tzinfo=UTC), JANELA.fim) == -2
+
+
+# --- enriquecimento dos registros -----------------------------------------------------
+
+
+def repo(full_name: str, criado: datetime = datetime(2020, 1, 1, tzinfo=UTC)) -> dict:
+    """Registro Repo como sai de selecao.converter_item (sem contributors)."""
+    return {
+        "full_name": full_name, "default_branch": "main", "stars": 1200, "language": "Python",
+        "created_at": criado, "fork": False, "archived": False,
+    }
+
+
+def test_enriquecer_acrescenta_contribuidores_e_idade():
+    repos = [repo("psf/requests"), repo("octocat/Hello-World", datetime(2026, 9, 1, tzinfo=UTC))]
+    enriquecidos = enriquecer_metadados(cliente_com_fixtures(), repos, JANELA)
+
+    assert [r["full_name"] for r in enriquecidos] == ["psf/requests", "octocat/Hello-World"]
+    assert enriquecidos[0] == repos[0] | {"contributors": 795, "idade_dias": 2465}
+    assert enriquecidos[1]["contributors"] == 3
+    assert enriquecidos[1]["idade_dias"] == 30
+
+
+def test_enriquecer_nao_altera_os_registros_de_entrada():
+    repos = [repo("psf/requests")]
+    enriquecer_metadados(cliente_com_fixtures(), repos, JANELA)
+    assert "contributors" not in repos[0] and "idade_dias" not in repos[0]
+
+
+def test_enriquecer_faz_uma_requisicao_por_repositorio_recebido():
+    """Só os repositórios passados são consultados: o funil (#5) decide quais."""
+    cliente = cliente_com_fixtures()
+    enriquecer_metadados(cliente, [repo("psf/requests")], JANELA)
+    assert [caminho for caminho, _ in cliente.gets] == ["/repos/psf/requests/contributors"]
+
+
+def test_enriquecer_lista_vazia_nao_chama_a_api():
+    cliente = cliente_com_fixtures()
+    assert enriquecer_metadados(cliente, [], JANELA) == []
+    assert cliente.gets == []
+
+
+def test_enriquecer_aceita_iteravel():
+    gerador = (r for r in [repo("psf/requests")])
+    assert len(enriquecer_metadados(cliente_com_fixtures(), gerador, JANELA)) == 1
+
+
+def test_enriquecer_mantem_contribuidores_desconhecidos_e_resume(caplog):
+    repos = [repo("torvalds/linux"), repo("psf/requests")]
+    with caplog.at_level(logging.INFO, logger="pipeline.metadados"):
+        enriquecidos = enriquecer_metadados(cliente_com_fixtures(), repos, JANELA)
+
+    assert enriquecidos[0]["contributors"] is None
+    assert enriquecidos[1]["contributors"] == 795
+    assert any("1 de 2" in r.getMessage() for r in caplog.records)
+
+
+def test_enriquecer_loga_progresso(caplog, monkeypatch):
+    monkeypatch.setattr("pipeline.metadados.INTERVALO_PROGRESSO", 1)
+    with caplog.at_level(logging.INFO, logger="pipeline.metadados"):
+        enriquecer_metadados(cliente_com_fixtures(), [repo("psf/requests")], JANELA)
+    assert any("1 repositórios processados" in r.getMessage() for r in caplog.records)

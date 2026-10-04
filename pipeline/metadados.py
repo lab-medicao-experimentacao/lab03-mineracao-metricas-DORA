@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from datetime import datetime
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from pipeline.config import Janela
 from pipeline.selecao import ClienteGitHub, corpo_json
 
 log = logging.getLogger(__name__)
@@ -23,6 +25,7 @@ CAMINHO_CONTRIBUIDORES = "/repos/{full_name}/contributors"
 PARAMETROS_CONTRIBUIDORES = {"per_page": 1, "anon": "true"}
 # Erro 403 da API em repositórios com histórico grande demais (ex.: torvalds/linux)
 MENSAGEM_LISTA_GRANDE = "too large to list contributors"
+INTERVALO_PROGRESSO = 100  # a cada quantos repositórios logar o progresso
 
 _LINK = re.compile(r"<([^>]*)>([^<]*)")
 _PARAMETRO = re.compile(r';\s*([\w-]+)\s*=\s*("[^"]*"|[^;,\s]*)')
@@ -69,6 +72,16 @@ def contar_contribuidores(corpo: Any, headers: Mapping[str, str] | None) -> int 
     return ultima if ultima is not None else len(corpo)
 
 
+def idade_dias(created_at: datetime, fim_janela: datetime) -> int:
+    """Idade do repositório em dias inteiros (arredondada para baixo) no fim da janela.
+
+    `fim_janela` é `Janela.fim`, que é EXCLUSIVO (00:00 UTC do dia seguinte ao último
+    dia da janela), ou seja, o instante em que a janela termina. Negativa se o
+    repositório foi criado depois da janela (não é truncada: o funil decide).
+    """
+    return (fim_janela - created_at).days
+
+
 def _cabecalho(headers: Mapping[str, str] | None, nome: str) -> str | None:
     """Busca de cabeçalho sem diferenciar maiúsculas (dict comum ou CaseInsensitiveDict)."""
     for chave, valor in (headers or {}).items():
@@ -101,6 +114,33 @@ def coletar_contribuidores(cliente: ClienteGitHub, full_name: str) -> int | None
         mensagem = corpo.get("message") if isinstance(corpo, dict) else repr(corpo)[:200]
         log.warning("%s: contribuidores desconhecidos (%s)", full_name, mensagem)
     return total
+
+
+def enriquecer_metadados(
+    cliente: ClienteGitHub, repos: Iterable[dict], janela: Janela
+) -> list[dict]:
+    """Copia cada Repo acrescentando `contributors` (nº ou None) e `idade_dias` (dias).
+
+    Custa 1 requisição por repositório RECEBIDO. A busca devolve dezenas de milhares
+    de candidatos, então esta função não deve ser chamada sobre todos eles: quem
+    decide o subconjunto (ex.: só os sorteados/elegíveis) é o funil (#5).
+    """
+    enriquecidos = []
+    for repo in repos:
+        enriquecidos.append(repo | {
+            "contributors": coletar_contribuidores(cliente, repo["full_name"]),
+            "idade_dias": idade_dias(repo["created_at"], janela.fim),
+        })
+        if len(enriquecidos) % INTERVALO_PROGRESSO == 0:
+            log.info("metadados: %d repositórios processados", len(enriquecidos))
+
+    desconhecidos = sum(r["contributors"] is None for r in enriquecidos)
+    if desconhecidos:
+        log.warning(
+            "contribuidores desconhecidos em %d de %d repositórios", desconhecidos, len(enriquecidos)
+        )
+    log.info("metadados coletados para %d repositórios", len(enriquecidos))
+    return enriquecidos
 
 
 def _ler_corpo(resposta: Any) -> Any:
