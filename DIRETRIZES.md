@@ -30,6 +30,8 @@
 | Excluir forks e repositórios arquivados na busca? | Proposta: **sim** (registrado no funil) | Grupo |
 | Formato do cache | Proposta: **um JSON por requisição** em `data/cache/` | C |
 | Semente aleatória | `42` (em `config.yaml`, usada em todo sorteio) | Grupo |
+| “1 deploy por mês” em releases/semana | `12 ÷ (365,25 / 7) ≈ 0,23` (`metricas/classificacao.py`) | A (#6) |
+| Classificação geral com métrica sem valor (`None`) | Ignorar a métrica e tirar a mediana das restantes; `None` se nenhuma tiver valor | A (#6) — validar com o grupo |
 
 Enquanto a janela não for divulgada, use em desenvolvimento `2025-10-01` a `2026-09-30` **apenas em `config.yaml`** — nunca hard-coded.
 
@@ -139,11 +141,13 @@ Run      = {"id": int, "workflow_id": int, "event": str, "head_branch": str,
 
 ```python
 # metricas/frequencia.py [A]
-def deployment_frequency(releases: list[Release], inicio: datetime, fim: datetime) -> float  # releases/semana
+def deployment_frequency(releases: list[Release], inicio: datetime, fim: datetime,
+                         incluir_prerelease: bool = False) -> float  # releases/semana
 
 # metricas/classificacao.py [A]
 def classificar_metrica(nome: str, valor: float | None) -> str | None  # "Elite"|"High"|"Medium"|"Low"
-def classificacao_geral(categorias: list[str]) -> str                  # mediana arredondada p/ baixo
+def classificacao_geral(categorias: list[str | None]) -> str | None    # mediana arredondada p/ baixo; ignora None
+def classificar_repositorio(frequencia, lead_time, cfr, recuperacao) -> dict  # categorias + "geral"
 
 # metricas/lead_time.py [B]
 def lead_time_por_release(commits_por_release: dict[str, list[Commit]], releases: list[Release]) -> float | None  # horas
