@@ -19,7 +19,7 @@ Como os proxies podem não medir o que as métricas originais medem, o estudo te
 
 **RQ 02. Qual o tempo entre um commit e seu respectivo deploy?**
 
-*Hipótese:* `<B preenche>`
+*Hipótese:* esperamos que a mediana do lead time por commit (variante b) seja menor do que a mediana por release (variante a) na maioria dos repositórios. A variante (a) toma o commit mais antigo de cada release e, portanto, cresce bastante quando uma mudança antiga espera vários ciclos até ser publicada; na variante (b), esse commit é apenas uma observação entre todas as mudanças entregues. Também esperamos uma distribuição assimétrica, com poucos repositórios acumulando tempos muito altos em releases que reúnem longos períodos de trabalho.
 
 **RQ 03. Qual a taxa de falha das mudanças entregues por esses repositórios?**
 
@@ -31,7 +31,7 @@ Como os proxies podem não medir o que as métricas originais medem, o estudo te
 
 **RQ 05. Repositórios com maior frequência de deploy apresentam maior ou menor taxa de falha?**
 
-*Hipótese:* `<B preenche>`
+*Hipótese:* esperamos correlação de Spearman fraca entre frequência de releases e CFR, com resultados possivelmente diferentes para as duas variantes de CFR. Publicar mais releases não implica, por si só, aumentar a fração de execuções de CI com falha; os projetos podem automatizar testes e revisão antes da publicação. Já o CFR baseado em releases corretivas depende do padrão de versionamento e da rapidez com que correções são publicadas, de modo que a mesma frequência pode se relacionar de outra forma com esse proxy. Por isso, não esperamos que os dois coeficientes indiquem necessariamente a mesma direção ou intensidade.
 
 **RQ 06. Quais características dos repositórios estão associadas a um melhor desempenho DORA?**
 

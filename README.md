@@ -47,6 +47,13 @@ Os parâmetros do estudo (janela de observação, faixas de estrelas, critérios
 | `data/processed/` | CSVs intermediários | não |
 | `output/` | funil de seleção, dataset final e dicionário de dados | sim |
 
+Os coletores de releases e commits exportam `data/processed/releases.csv`
+(`full_name`, `tag_name`, `published_at`, `draft`, `prerelease`),
+`data/processed/tags.csv` (`full_name`, `tag_name`, `commit_sha`, `commit_date`)
+e `data/processed/commits.csv` (`full_name`, `tag_name`, `sha`,
+`author_date`, `message`). As datas são gravadas em ISO 8601 UTC. Releases
+anteriores à janela são preservadas para servir de base ao cálculo de lead time.
+
 ## Testes
 
 ```bash
