@@ -5,7 +5,8 @@ Etapas, da mais barata para a mais cara em cota de API (DIRETRIZES 6.3):
 1. candidatos da busca (#3) — sem custo extra;
 2. sem fork e não arquivado — campos que a busca já traz, sem custo;
 3. usa GitHub Actions — 1 chamada a `/actions/workflows` (`total_count > 0`);
-4. ≥ `min_releases` releases publicadas na janela — coleta de releases (#7, B);
+4. ≥ `min_releases` releases publicadas na janela — coleta de releases (#7, B), via
+   `ReleasesColetadas`;
 5. ≥ `min_runs` runs válidos na janela — coleta de workflow runs (#9, C), a mais cara;
 6. amostra: candidatos em ordem aleatória (semente do config) até reunir `tamanho_amostra`.
 
@@ -51,6 +52,7 @@ from pathlib import Path
 from metricas import run_valido
 from metricas.frequencia import releases_publicadas
 from pipeline.config import Config, Janela
+from pipeline.releases import coletar_releases
 from pipeline.selecao import ClienteGitHub, corpo_json
 
 log = logging.getLogger(__name__)
@@ -249,6 +251,29 @@ def usa_github_actions(cliente: ClienteGitHub, full_name: str) -> bool:
     """
     resposta = cliente.get(CAMINHO_WORKFLOWS.format(full_name=full_name), {"per_page": 1})
     return int(corpo_json(resposta)["total_count"]) > 0
+
+
+class ReleasesColetadas:
+    """Coletor da etapa 4 ligado a `coletar_releases` (#7); guarda as releases por repositório.
+
+    Passe a instância como `releases_de` de `executar_funil`. As releases dos repositórios da
+    amostra já ficam em memória, então `da_amostra` alimenta `salvar_releases` sem consultar a
+    API de novo. Cada repositório é consultado no máximo uma vez.
+    """
+
+    def __init__(self, cliente: ClienteGitHub):
+        self._cliente = cliente
+        self.por_repo: dict[str, list[dict]] = {}
+
+    def __call__(self, repo: dict) -> list[dict]:
+        nome = repo["full_name"]
+        if nome not in self.por_repo:
+            self.por_repo[nome] = coletar_releases(self._cliente, nome)
+        return self.por_repo[nome]
+
+    def da_amostra(self, amostra: Iterable[dict]) -> dict[str, list[dict]]:
+        """Releases de cada repositório da amostra, na ordem da amostra (KeyError se não coletado)."""
+        return {r["full_name"]: self.por_repo[r["full_name"]] for r in amostra}
 
 
 # --- disco ------------------------------------------------------------------------------

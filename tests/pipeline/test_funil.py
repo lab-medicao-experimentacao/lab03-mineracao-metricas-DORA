@@ -15,6 +15,7 @@ from pipeline.funil import (
     ETAPA_CADASTRAL,
     ETAPA_CANDIDATOS,
     EtapaFunil,
+    ReleasesColetadas,
     contar_releases_validas,
     contar_runs_validos,
     executar_funil,
@@ -23,6 +24,7 @@ from pipeline.funil import (
     salvar_funil,
     usa_github_actions,
 )
+from pipeline.releases import salvar_releases
 
 INICIO = datetime(2025, 10, 1, tzinfo=timezone.utc)
 FIM = datetime(2026, 10, 1, tzinfo=timezone.utc)  # exclusivo
@@ -524,6 +526,95 @@ def test_usa_github_actions_aceita_json_como_metodo():
             return RespostaRequests()
 
     assert usa_github_actions(ClienteRequests(0), "dono/repo") is True
+
+
+# --- etapa 4 ligada à coleta de releases (#7) ------------------------------------------------
+
+
+def release_api(tag: str, publicada: str | None, draft: bool = False, prerelease: bool = False) -> dict:
+    """Release como a API devolve (datas ISO 8601 em texto)."""
+    return {"tag_name": tag, "published_at": publicada, "draft": draft, "prerelease": prerelease}
+
+
+class ClienteReleases:
+    """Cliente falso de `/repos/{full_name}/releases`; registra os repositórios consultados."""
+
+    def __init__(self, releases_por_repo: dict[str, list[dict]]):
+        self.releases_por_repo = releases_por_repo
+        self.consultados: list[str] = []
+
+    def get(self, path, params=None):
+        raise AssertionError(f"chamada inesperada: {path}")
+
+    def get_paginated(self, path, params=None, item_key=None):
+        nome = path.removeprefix("/repos/").removesuffix("/releases")
+        self.consultados.append(nome)
+        return self.releases_por_repo[nome]
+
+
+def cinco_releases_na_janela() -> list[dict]:
+    return [release_api(f"v{i}", f"2025-11-0{i}T12:00:00Z") for i in range(1, 6)]
+
+
+def test_releases_coletadas_alimentam_a_etapa_4_com_o_formato_da_api():
+    cliente = ClienteReleases({
+        "a/ok": cinco_releases_na_janela(),
+        # 4 na janela + 1 antes do início, 1 draft e 1 pré-release: não passa
+        "a/poucas": [
+            release_api("v0", "2025-09-30T23:59:59Z"),
+            *cinco_releases_na_janela()[:4],
+            release_api("rascunho", None, draft=True),
+            release_api("v5-rc", "2025-11-06T00:00:00Z", prerelease=True),
+        ],
+    })
+    fontes = Fontes()
+    coletor = ReleasesColetadas(cliente)
+
+    resultado = executar_funil(
+        [repo("a/ok"), repo("a/poucas")], CONFIG, fontes.usa_actions, coletor, fontes.runs_de
+    )
+
+    assert nomes(resultado.amostra) == ["a/ok"]
+    assert por_etapa(resultado)[">= 5 releases publicadas na janela"].n_descartados == 1
+    assert fontes.runs == ["a/ok"]
+
+
+def test_releases_coletadas_consultam_cada_repositorio_uma_vez():
+    cliente = ClienteReleases({"a/ok": cinco_releases_na_janela()})
+    coletor = ReleasesColetadas(cliente)
+
+    primeira = coletor(repo("a/ok"))
+    segunda = coletor(repo("a/ok"))
+
+    assert segunda is primeira
+    assert cliente.consultados == ["a/ok"]
+    assert primeira[0]["published_at"] == datetime(2025, 11, 1, 12, tzinfo=timezone.utc)
+
+
+def test_releases_coletadas_da_amostra_seguem_a_ordem_da_amostra(tmp_path):
+    cliente = ClienteReleases({
+        "a/x": cinco_releases_na_janela(),
+        "a/y": cinco_releases_na_janela()[:2],
+        "a/z": cinco_releases_na_janela()[:1],
+    })
+    coletor = ReleasesColetadas(cliente)
+    for nome in ("a/x", "a/y", "a/z"):
+        coletor(repo(nome))
+
+    por_repo = coletor.da_amostra([repo("a/z"), repo("a/x")])
+
+    assert list(por_repo) == ["a/z", "a/x"]
+    assert [len(r) for r in por_repo.values()] == [1, 5]
+    caminho = salvar_releases(por_repo, tmp_path)
+    with caminho.open(encoding="utf-8", newline="") as f:
+        assert [l["full_name"] for l in csv.DictReader(f)] == ["a/z"] + ["a/x"] * 5
+
+
+def test_releases_coletadas_da_amostra_exige_repositorio_ja_coletado():
+    coletor = ReleasesColetadas(ClienteReleases({}))
+
+    with pytest.raises(KeyError, match="a/nunca"):
+        coletor.da_amostra([repo("a/nunca")])
 
 
 # --- disco ------------------------------------------------------------------------------------
