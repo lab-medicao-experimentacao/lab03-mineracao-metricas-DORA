@@ -40,8 +40,15 @@ def main(argv: list[str] | None = None) -> int:
     # TODO(#2, #5): ligar a seleção quando o GitHubClient (#2) existir:
     #   repos = selecao.buscar_candidatos(cliente, config.faixas_estrelas)
     #   selecao.salvar_candidatos(repos, config.dir_saida)
+    # TODO(#5, #7, #9): ligar o funil quando os coletores de releases (#7) e runs (#9) existirem:
+    #   resultado = funil.executar_funil(
+    #       repos, config,
+    #       usa_actions=lambda r: funil.usa_github_actions(cliente, r["full_name"]),
+    #       releases_de=<coletor de #7>, runs_de=<coletor de #9>,
+    #   )
+    #   funil.salvar_funil(resultado.etapas, config.dir_saida)  # amostra → repos.csv (#4)
     # TODO(#5): metadados só para o subconjunto que o funil escolher (1 requisição/repo):
-    #   amostra = metadados.enriquecer_metadados(cliente, elegiveis, config.janela)
+    #   amostra = metadados.enriquecer_metadados(cliente, resultado.amostra, config.janela)
     #   metadados.salvar_repos(amostra, config.dir_saida)
     log.info("nenhuma etapa de coleta integrada ainda")
     return 0

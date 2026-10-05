@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from metricas.frequencia import deployment_frequency
+from metricas.frequencia import deployment_frequency, releases_publicadas
 
 INICIO = datetime(2025, 10, 1, tzinfo=timezone.utc)
 FIM = datetime(2026, 10, 1, tzinfo=timezone.utc)  # exclusivo; 365 dias
@@ -59,3 +59,28 @@ def test_limites_da_janela_inicio_inclusivo_fim_exclusivo():
 def test_janela_invalida_gera_erro():
     with pytest.raises(ValueError):
         deployment_frequency([], FIM, INICIO)
+
+
+# --- releases_publicadas (definição de deploy reutilizada pelo funil, #5) ---
+
+
+def test_releases_publicadas_aplica_a_definicao_de_deploy():
+    validas = [release(INICIO), release(FIM - timedelta(microseconds=1))]
+    releases = validas + [
+        release(FIM),                                    # fora (fim exclusivo)
+        release(INICIO - timedelta(microseconds=1)),     # fora
+        release(INICIO + timedelta(days=1), prerelease=True),
+        release(INICIO + timedelta(days=2), draft=True),
+        release(None, draft=True),
+    ]
+    assert releases_publicadas(releases, INICIO, FIM) == validas
+
+
+def test_releases_publicadas_variante_com_prereleases():
+    pre = release(INICIO + timedelta(days=1), prerelease=True)
+    assert releases_publicadas([pre], INICIO, FIM, incluir_prerelease=True) == [pre]
+
+
+def test_releases_publicadas_janela_invalida_gera_erro():
+    with pytest.raises(ValueError):
+        releases_publicadas([], FIM, INICIO)
