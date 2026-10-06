@@ -39,6 +39,8 @@ Execute o pipeline com um único comando:
 python -m pipeline --config config.yaml
 ```
 
+A execução busca os candidatos, aplica o funil e coleta metadados, releases, tags, commits e workflow runs só da amostra. Rodar de novo reaproveita o cache em `data/cache`. Com `--funil-completo`, o funil avalia todos os candidatos (custo máximo de cota, mesma amostra).
+
 Os parâmetros do estudo (janela de observação, faixas de estrelas, critérios de inclusão, tamanho da amostra e semente) ficam em [`config.yaml`](./config.yaml).
 
 | Pasta | Conteúdo | Versionada? |
