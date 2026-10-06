@@ -33,6 +33,11 @@ export GITHUB_TOKEN=ghp_...
 $env:GITHUB_TOKEN = "ghp_..."
 ```
 
+Alternativa: crie um arquivo `.env` na pasta de onde o comando é executado (a raiz do
+repositório) com a linha `GITHUB_TOKEN=ghp_...`. O `.env` está no `.gitignore` e é lido
+pelo próprio pipeline (sem dependência extra); uma variável já definida no ambiente tem
+precedência sobre o arquivo.
+
 Execute o pipeline com um único comando:
 
 ```bash

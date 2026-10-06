@@ -2,7 +2,15 @@ from datetime import datetime, timezone
 
 import pytest
 
-from pipeline.config import ErroConfiguracao, FaixaEstrelas, carregar_config, ler_token
+import os
+
+from pipeline.config import (
+    ErroConfiguracao,
+    FaixaEstrelas,
+    carregar_config,
+    carregar_dotenv,
+    ler_token,
+)
 
 
 def test_carrega_config_valido(escrever_config):
@@ -90,3 +98,42 @@ def test_ler_token_ausente_gera_erro(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     with pytest.raises(ErroConfiguracao):
         ler_token()
+
+
+# --- .env (lido sem dependência nova; a variável de ambiente tem precedência) ---------
+
+
+@pytest.fixture
+def ambiente(monkeypatch):
+    """Cópia isolada de os.environ: o que o .env definir some ao fim do teste."""
+    copia = {k: v for k, v in os.environ.items() if k not in ("GITHUB_TOKEN", "OUTRA")}
+    monkeypatch.setattr(os, "environ", copia)
+    return copia
+
+
+def test_carregar_dotenv_define_variaveis_ausentes(tmp_path, ambiente):
+    (tmp_path / ".env").write_text(
+        '# comentário\n\nexport GITHUB_TOKEN="ghp_do_arquivo"\nOUTRA = valor # nota\n',
+        encoding="utf-8",
+    )
+    assert carregar_dotenv(tmp_path / ".env") == {"GITHUB_TOKEN", "OUTRA"}
+    assert ler_token() == "ghp_do_arquivo"
+    assert ambiente["OUTRA"] == "valor"
+
+
+def test_carregar_dotenv_nao_sobrescreve_variavel_ja_definida(tmp_path, ambiente):
+    ambiente["GITHUB_TOKEN"] = "do_ambiente"
+    (tmp_path / ".env").write_text("GITHUB_TOKEN=do_arquivo\n", encoding="utf-8")
+    assert carregar_dotenv(tmp_path / ".env") == set()
+    assert ler_token() == "do_ambiente"
+
+
+def test_carregar_dotenv_sem_arquivo_nao_faz_nada(tmp_path, ambiente):
+    assert carregar_dotenv(tmp_path / ".env") == set()
+    assert "GITHUB_TOKEN" not in ambiente
+
+
+def test_carregar_dotenv_aceita_aspas_simples_bom_e_crlf(tmp_path, ambiente):
+    (tmp_path / ".env").write_bytes("﻿GITHUB_TOKEN='abc#1'\r\nlinha sem igual\r\n".encode("utf-8"))
+    assert carregar_dotenv(tmp_path / ".env") == {"GITHUB_TOKEN"}
+    assert ler_token() == "abc#1"

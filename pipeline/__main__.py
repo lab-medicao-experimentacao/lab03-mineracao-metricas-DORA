@@ -7,11 +7,13 @@ import logging
 import sys
 
 from pipeline import commits, funil, metadados, releases, selecao, workflow_runs
-from pipeline.config import Config, ErroConfiguracao, carregar_config, ler_token
+from pipeline.config import Config, ErroConfiguracao, carregar_config, carregar_dotenv, ler_token
 from pipeline.github_client import GitHubClient
 from pipeline.selecao import ClienteGitHub
 
 log = logging.getLogger("pipeline")
+
+ARQUIVO_ENV = ".env"  # na pasta de execução; ignorado pelo git
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -27,6 +29,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         config = carregar_config(args.config)
+        if carregar_dotenv(ARQUIVO_ENV):
+            log.info("variáveis lidas de %s", ARQUIVO_ENV)
         token = ler_token()
     except ErroConfiguracao as e:
         log.error("%s", e)
@@ -42,8 +46,19 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     cliente = GitHubClient(token, config.dir_cache)
-    executar(cliente, config, avaliar_todos=args.funil_completo)
-    log.info("requisições à rede nesta execução: %d", cliente.requisicoes_rede)
+    try:
+        executar(cliente, config, avaliar_todos=args.funil_completo)
+    except KeyboardInterrupt:
+        log.warning(
+            "interrompido: as respostas já baixadas estão em %s; rode o mesmo comando "
+            "para continuar de onde parou", config.dir_cache,
+        )
+        return 130
+    finally:
+        log.info(
+            "requisições à rede nesta execução: %d (respostas do cache: %d)",
+            getattr(cliente, "requisicoes_rede", 0), getattr(cliente, "acertos_cache", 0),
+        )
     return 0
 
 

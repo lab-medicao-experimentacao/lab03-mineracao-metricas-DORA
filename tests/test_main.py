@@ -14,6 +14,36 @@ from pipeline.workflow_runs import ResultadoRuns
 DENTRO = datetime(2025, 11, 1, tzinfo=timezone.utc)
 
 
+@pytest.fixture(autouse=True)
+def pasta_sem_env(tmp_path, monkeypatch):
+    """Roda cada teste numa pasta vazia: um .env real do repositório nunca é lido."""
+    monkeypatch.chdir(tmp_path)
+
+
+def test_main_le_token_do_dotenv(escrever_config, monkeypatch, tmp_path):
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    (tmp_path / ".env").write_text("GITHUB_TOKEN=token-do-arquivo\n", encoding="utf-8")
+    tokens = []
+    monkeypatch.setattr(entrada, "GitHubClient", lambda token, cache: tokens.append(token) or object())
+    monkeypatch.setattr(entrada, "executar", lambda cliente, config, avaliar_todos: None)
+    try:
+        assert main(["--config", str(escrever_config())]) == 0
+    finally:
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    assert tokens == ["token-do-arquivo"]
+
+
+def test_main_ctrl_c_avisa_que_basta_rodar_de_novo(escrever_config, monkeypatch, caplog):
+    monkeypatch.setenv("GITHUB_TOKEN", "token-de-teste")
+
+    def interrompe(cliente, config, avaliar_todos):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(entrada, "executar", interrompe)
+    assert main(["--config", str(escrever_config())]) == 130
+    assert "rode o mesmo comando" in caplog.text
+
+
 def test_main_executa_com_config_e_token(escrever_config, monkeypatch, tmp_path):
     monkeypatch.setenv("GITHUB_TOKEN", "token-de-teste")
     chamadas = []
