@@ -47,6 +47,18 @@ Os parâmetros do estudo (janela de observação, faixas de estrelas, critérios
 | `data/processed/` | CSVs intermediários | não |
 | `output/` | funil de seleção, dataset final e dicionário de dados | sim |
 
+O `GitHubClient` (`pipeline/github_client.py`) grava cada resposta da API em
+`data/cache/<aa>/<sha256>.json`; ao rodar de novo (ou após `Ctrl+C`), o que já foi
+baixado não é requisitado outra vez. Ele espera a renovação da cota quando
+`X-RateLimit-Remaining` chega a 0 e repete erros 5xx com espera de 1 s, 2 s, 4 s, 8 s…
+Para recomeçar do zero, apague `data/cache/`.
+
+O coletor de workflow runs (`pipeline/workflow_runs.py`) consulta um mês por vez
+(push no default branch) e avisa, no log, se algum mês atingir o teto de 1.000
+resultados da API. Ele exporta `data/processed/runs.csv` (`full_name`, `id`,
+`workflow_id`, `event`, `head_branch`, `conclusion`, `classe`, `created_at`,
+`run_started_at`, `updated_at`), em que `classe` é `sucesso`, `falha` ou `ignorado`.
+
 Os coletores de releases e commits exportam `data/processed/releases.csv`
 (`full_name`, `tag_name`, `published_at`, `draft`, `prerelease`),
 `data/processed/tags.csv` (`full_name`, `tag_name`, `commit_sha`, `commit_date`)
