@@ -6,7 +6,10 @@ import argparse
 import logging
 import sys
 
-from pipeline.config import ErroConfiguracao, carregar_config, ler_token
+from pipeline import commits, funil, metadados, releases, selecao, workflow_runs
+from pipeline.config import Config, ErroConfiguracao, carregar_config, ler_token
+from pipeline.github_client import GitHubClient
+from pipeline.selecao import ClienteGitHub
 
 log = logging.getLogger("pipeline")
 
@@ -14,13 +17,17 @@ log = logging.getLogger("pipeline")
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pipeline", description="Mineração de métricas DORA")
     parser.add_argument("--config", default="config.yaml", help="caminho do config.yaml")
+    parser.add_argument(
+        "--funil-completo", action="store_true",
+        help="avalia todos os candidatos no funil (custo máximo; a amostra não muda)",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
     try:
         config = carregar_config(args.config)
-        ler_token()
+        token = ler_token()
     except ErroConfiguracao as e:
         log.error("%s", e)
         return 2
@@ -34,26 +41,52 @@ def main(argv: list[str] | None = None) -> int:
         config.tamanho_amostra, config.semente,
     )
 
-    # Etapas do pipeline, conectadas conforme as Issues forem integradas:
-    #   seleção (#3) → metadados (#4) → releases (#7) → commits (#8)
-    #   → workflow runs (#9) → funil e amostra (#5)
-    # TODO(#2, #5): ligar a seleção quando o GitHubClient (#2) existir:
-    #   repos = selecao.buscar_candidatos(cliente, config.faixas_estrelas)
-    #   selecao.salvar_candidatos(repos, config.dir_saida)
-    # TODO(#5, #9): ligar o funil quando o coletor de runs (#9) existir (releases já ligadas, #7):
-    #   releases_de = funil.ReleasesColetadas(cliente)
-    #   resultado = funil.executar_funil(
-    #       repos, config,
-    #       usa_actions=lambda r: funil.usa_github_actions(cliente, r["full_name"]),
-    #       releases_de=releases_de, runs_de=<coletor de #9>,
-    #   )
-    #   funil.salvar_funil(resultado.etapas, config.dir_saida)  # amostra → repos.csv (#4)
-    #   releases.salvar_releases(releases_de.da_amostra(resultado.amostra), config.dir_processados)
-    # TODO(#5): metadados só para o subconjunto que o funil escolher (1 requisição/repo):
-    #   amostra = metadados.enriquecer_metadados(cliente, resultado.amostra, config.janela)
-    #   metadados.salvar_repos(amostra, config.dir_saida)
-    log.info("nenhuma etapa de coleta integrada ainda")
+    cliente = GitHubClient(token, config.dir_cache)
+    executar(cliente, config, avaliar_todos=args.funil_completo)
+    log.info("requisições à rede nesta execução: %d", cliente.requisicoes_rede)
     return 0
+
+
+def executar(cliente: ClienteGitHub, config: Config, avaliar_todos: bool = False) -> None:
+    """Seleção (#3) → funil (#5) → metadados (#4) → releases/tags (#7) → commits (#8) → runs (#9).
+
+    Só a amostra do funil é enriquecida e tem commits, tags e runs gravados. Rodar de novo
+    reaproveita o cache em disco do cliente (#10).
+    """
+    candidatos = selecao.buscar_candidatos(cliente, config.faixas_estrelas)
+    selecao.salvar_candidatos(candidatos, config.dir_saida)
+
+    releases_de = funil.ReleasesColetadas(cliente)
+    runs_de = workflow_runs.RunsColetados(cliente, config.janela)
+    resultado = funil.executar_funil(
+        candidatos, config,
+        usa_actions=lambda r: funil.usa_github_actions(cliente, r["full_name"]),
+        releases_de=releases_de, runs_de=runs_de, avaliar_todos=avaliar_todos,
+    )
+    funil.salvar_funil(resultado.etapas, config.dir_saida)
+
+    amostra = metadados.enriquecer_metadados(cliente, resultado.amostra, config.janela)
+    metadados.salvar_repos(amostra, config.dir_saida)
+
+    releases_por_repo = releases_de.da_amostra(amostra)
+    releases.salvar_releases(releases_por_repo, config.dir_processados)
+    releases.salvar_tags(
+        {r["full_name"]: releases.coletar_tags(cliente, r["full_name"]) for r in amostra},
+        config.dir_processados,
+    )
+
+    commits_por_repo = {}
+    for nome, rels in releases_por_repo.items():
+        coletados = commits.coletar_commits_entre_releases(cliente, nome, rels, config.janela)
+        commits_por_repo[nome] = coletados.commits_por_release
+    commits.salvar_commits(commits_por_repo, config.dir_processados)
+
+    workflow_runs.salvar_runs(runs_de.da_amostra(amostra), config.dir_processados)
+    if runs_de.saturados:
+        log.warning(
+            "%d repositórios da coleta com meses no teto de 1.000 runs: %s",
+            len(runs_de.saturados), ", ".join(sorted(runs_de.saturados)),
+        )
 
 
 if __name__ == "__main__":
