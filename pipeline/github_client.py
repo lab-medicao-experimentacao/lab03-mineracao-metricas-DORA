@@ -10,6 +10,9 @@ Contrato 5.1 das DIRETRIZES: `get` devolve um `Response` (`.json`, `.headers`) e
 - Rate limit: lê `X-RateLimit-Remaining/Reset` (por recurso: core, search…) e
   espera a renovação quando a cota acaba, antes de a API recusar.
 - Backoff exponencial (1 s, 2 s, 4 s, 8 s…) para 5xx e falhas de rede.
+- `graphql(query, variables)` (extensão do contrato): POST /graphql com o mesmo cache,
+  backoff e cota própria (recurso 'graphql'); usado onde a REST custaria uma chamada
+  por item (datas das tags).
 - O token só vai no cabeçalho `Authorization` de requisições a `api.github.com`;
   nunca é registrado em log nem gravado no cache.
 """
@@ -38,6 +41,7 @@ log = logging.getLogger(__name__)
 HOST_API = "api.github.com"
 URL_BASE = f"https://{HOST_API}"
 VERSAO_API = "2022-11-28"
+CAMINHO_GRAPHQL = "/graphql"
 
 MAX_TENTATIVAS = 5          # tentativas por requisição em 5xx/falha de rede
 ESPERA_BASE_S = 1.0         # 1 s, 2 s, 4 s, 8 s…
@@ -79,6 +83,16 @@ class ErroHTTP(Exception):
         self.status_code = response.status_code
         mensagem = _mensagem_da_api(response)
         super().__init__(f"HTTP {response.status_code} em {metodo_e_caminho}: {mensagem}")
+
+
+class ErroGraphQL(Exception):
+    """Resposta GraphQL com `errors` (ex.: NOT_FOUND). `tipos` traz os `type` dos erros."""
+
+    def __init__(self, erros: list[dict]):
+        self.erros = erros
+        self.tipos = {str(e.get("type")) for e in erros if e.get("type")}
+        mensagens = "; ".join(str(e.get("message", "")) for e in erros)
+        super().__init__(f"GraphQL: {mensagens or 'erro sem mensagem'}")
 
 
 class GitHubClient:
@@ -167,10 +181,39 @@ class GitHubClient:
                 return itens
             caminho, parametros = _separar_url(proxima)
 
+    # --- GraphQL (extensão do contrato 5.1) -------------------------------------------
+
+    def graphql(self, query: str, variables: dict | None = None) -> dict:
+        """POST /graphql com o mesmo cache, cota (recurso 'graphql') e backoff do `get`.
+
+        Devolve o campo `data`. Resposta com `errors` levanta `ErroGraphQL` e não vai para
+        o cache; `RATE_LIMITED` espera a renovação e repete.
+        """
+        corpo = {"query": query, "variables": variables or {}}
+        arquivo = self._arquivo_da_chave(
+            f"POST {CAMINHO_GRAPHQL} " + json.dumps(corpo, sort_keys=True, ensure_ascii=False)
+        )
+        resposta = self._ler_cache(arquivo)
+        if resposta is not None:
+            self.acertos_cache += 1
+        else:
+            resposta = self._buscar_na_rede(CAMINHO_GRAPHQL, {}, corpo)
+            if resposta.status_code < 400 and not _erros_graphql(resposta.json):
+                self._gravar_cache(arquivo, CAMINHO_GRAPHQL, corpo["variables"], resposta)
+        if resposta.status_code >= 400:
+            raise ErroHTTP(resposta, f"POST {CAMINHO_GRAPHQL}")
+        erros = _erros_graphql(resposta.json)
+        if erros:
+            raise ErroGraphQL(erros)
+        return resposta.json["data"]
+
     # --- rede ---------------------------------------------------------------------
 
-    def _buscar_na_rede(self, path: str, parametros: dict[str, str]) -> Response:
-        rotulo = f"GET {path}"
+    def _buscar_na_rede(
+        self, path: str, parametros: dict[str, str], corpo: dict | None = None
+    ) -> Response:
+        """GET (ou POST com `corpo` JSON, para o GraphQL) com cota, limite e backoff."""
+        rotulo = f"{'GET' if corpo is None else 'POST'} {path}"
         falhas = esperas_cota = 0
         while True:
             self._aguardar_cota(_recurso_presumido(path))
@@ -179,7 +222,10 @@ class GitHubClient:
                 log.info("%d requisições à API (%d respostas vindas do cache)",
                          self.requisicoes_rede, self.acertos_cache)
             try:
-                bruta = self._sessao.get(URL_BASE + path, params=parametros, timeout=self._timeout)
+                if corpo is None:
+                    bruta = self._sessao.get(URL_BASE + path, params=parametros, timeout=self._timeout)
+                else:
+                    bruta = self._sessao.post(URL_BASE + path, json=corpo, timeout=self._timeout)
             except requests.RequestException as erro:
                 falhas += 1
                 if falhas >= self._max_tentativas:
@@ -197,8 +243,13 @@ class GitHubClient:
                 self._esperar_backoff(falhas, rotulo, f"HTTP {bruta.status_code}")
                 continue
 
-            if bruta.status_code in (403, 429):
+            graphql_limitado = corpo is not None and any(
+                e.get("type") == "RATE_LIMITED" for e in _erros_graphql(resposta.json)
+            )
+            if bruta.status_code in (403, 429) or graphql_limitado:
                 espera = self._espera_por_limite(resposta, bruta.headers, bruta.status_code)
+                if espera is None and graphql_limitado:
+                    espera = ESPERA_SECUNDARIA
                 if espera is not None:
                     esperas_cota += 1
                     if esperas_cota > MAX_ESPERAS_COTA:
@@ -365,7 +416,16 @@ def _normalizar_parametros(params: Mapping[str, Any] | None) -> dict[str, str]:
 
 
 def _recurso_presumido(path: str) -> str:
+    if path == CAMINHO_GRAPHQL:
+        return "graphql"
     return "search" if path.startswith("/search") else "core"
+
+
+def _erros_graphql(corpo: Any) -> list[dict]:
+    """Lista `errors` de uma resposta GraphQL (vazia se não houver)."""
+    if isinstance(corpo, dict) and isinstance(corpo.get("errors"), list):
+        return [e for e in corpo["errors"] if isinstance(e, dict)]
+    return []
 
 
 def _cabecalho(headers: Mapping[str, str] | None, nome: str) -> str | None:
@@ -405,6 +465,9 @@ def _converter(bruta: requests.Response) -> Response:
 def _mensagem_da_api(resposta: Response) -> str:
     if isinstance(resposta.json, dict) and resposta.json.get("message"):
         return str(resposta.json["message"])
+    erros = _erros_graphql(resposta.json)
+    if erros:
+        return "; ".join(str(e.get("message", "")) for e in erros)
     return resposta.text or "sem mensagem"
 
 

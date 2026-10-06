@@ -130,6 +130,9 @@ class GitHubClient:
         # Response tem .json (dict|list) e .headers (dict); usa cache; trata rate limit e 5xx
     def get_paginated(self, path: str, params: dict | None = None, item_key: str | None = None) -> list[dict]
         # segue Link rel="next"; item_key para respostas tipo {"total_count":..,"items":[..]}
+    def graphql(self, query: str, variables: dict | None = None) -> dict
+        # extensão (#10): POST /graphql com o mesmo cache/backoff e cota própria; devolve `data`;
+        # `errors` → ErroGraphQL. Usado nas datas das tags (1 ponto por 100 tags, em vez de 1 chamada por tag)
 ```
 
 Até C entregar a versão completa, existe um **stub mínimo** (sem cache/rate limit) com a mesma assinatura, para A e B não ficarem bloqueados.

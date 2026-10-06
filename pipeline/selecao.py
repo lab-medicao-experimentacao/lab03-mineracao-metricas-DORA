@@ -37,6 +37,8 @@ class ClienteGitHub(Protocol):
         self, path: str, params: dict | None = None, item_key: str | None = None
     ) -> list[dict]: ...
 
+    def graphql(self, query: str, variables: dict | None = None) -> dict: ...
+
 
 # --- transformação (pura) -------------------------------------------------------
 

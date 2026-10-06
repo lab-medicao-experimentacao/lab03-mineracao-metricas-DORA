@@ -10,6 +10,7 @@ from requests.structures import CaseInsensitiveDict
 
 from pipeline.github_client import (
     URL_BASE,
+    ErroGraphQL,
     ErroHTTP,
     GitHubClient,
     Response,
@@ -43,6 +44,13 @@ class SessaoFalsa:
 
     def get(self, url, params=None, timeout=None):
         self.chamadas.append((url, params))
+        return self._proxima()
+
+    def post(self, url, json=None, timeout=None):
+        self.chamadas.append((url, json))
+        return self._proxima()
+
+    def _proxima(self):
         proxima = self.fila.pop(0)
         if isinstance(proxima, Exception):
             raise proxima
@@ -490,3 +498,72 @@ def test_get_paginated_propaga_erro_http(tmp_path):
     with pytest.raises(ErroHTTP) as e:
         c.get_paginated("/repos/o/r/compare/a...b", item_key="commits")
     assert e.value.status_code == 404
+
+
+# --- GraphQL (usado onde a REST custaria uma chamada por item, ex.: datas das tags) ------
+
+CONSULTA = "query($o: String!) { repository(owner: $o, name: \"r\") { id } }"
+
+
+def test_graphql_envia_consulta_e_devolve_data(tmp_path):
+    c, sessao, _ = cliente(tmp_path, ok({"data": {"repository": {"id": "X"}}}))
+    assert c.graphql(CONSULTA, {"o": "dono"}) == {"repository": {"id": "X"}}
+    assert sessao.chamadas == [(f"{URL_BASE}/graphql", {"query": CONSULTA, "variables": {"o": "dono"}})]
+    assert sessao.headers["Authorization"] == f"Bearer {TOKEN}"
+
+
+def test_graphql_usa_o_cache_e_retoma_em_novo_cliente(tmp_path):
+    c1, sessao1, _ = cliente(tmp_path, ok({"data": {"v": 1}}))
+    c1.graphql(CONSULTA, {"o": "dono"})
+    assert c1.graphql(CONSULTA, {"o": "dono"}) == {"v": 1}
+    assert len(sessao1.chamadas) == 1
+
+    c2, sessao2, _ = cliente(tmp_path)
+    assert c2.graphql(CONSULTA, {"o": "dono"}) == {"v": 1}
+    assert sessao2.chamadas == []
+
+
+def test_graphql_variaveis_diferentes_sao_consultas_diferentes(tmp_path):
+    c, sessao, _ = cliente(tmp_path, ok({"data": {"v": 1}}), ok({"data": {"v": 2}}))
+    assert c.graphql(CONSULTA, {"o": "a"}) == {"v": 1}
+    assert c.graphql(CONSULTA, {"o": "b"}) == {"v": 2}
+    assert len(sessao.chamadas) == 2
+
+
+def test_graphql_com_errors_levanta_e_nao_vai_para_o_cache(tmp_path):
+    erro = ok({"data": {"repository": None},
+               "errors": [{"type": "NOT_FOUND", "message": "Could not resolve to a Repository"}]})
+    c, sessao, _ = cliente(tmp_path, erro, ok({"data": {"v": 1}}))
+    with pytest.raises(ErroGraphQL) as e:
+        c.graphql(CONSULTA, {"o": "dono"})
+    assert "Could not resolve" in str(e.value)
+    assert e.value.tipos == {"NOT_FOUND"}
+    assert c.graphql(CONSULTA, {"o": "dono"}) == {"v": 1}
+    assert len(sessao.chamadas) == 2
+
+
+def test_graphql_rate_limited_espera_a_renovacao_e_repete(tmp_path):
+    limite = ok({"errors": [{"type": "RATE_LIMITED", "message": "API rate limit exceeded"}]},
+                **{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1030",
+                   "X-RateLimit-Resource": "graphql"})
+    c, sessao, relogio = cliente(tmp_path, limite, ok({"data": {"v": 1}}), relogio=Relogio(1_000.0))
+    assert c.graphql(CONSULTA, {"o": "dono"}) == {"v": 1}
+    assert relogio.esperas == [31.0]
+    assert len(sessao.chamadas) == 2
+
+
+def test_graphql_cota_propria_nao_bloqueia_a_rest(tmp_path):
+    zerada = ok({"data": {"v": 1}}, **{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1060",
+                                       "X-RateLimit-Resource": "graphql"})
+    c, _, relogio = cliente(tmp_path, zerada, ok({}), ok({"data": {"v": 2}}), relogio=Relogio(1_000.0))
+    c.graphql(CONSULTA, {"o": "a"})
+    c.get("/repos/o/r")
+    assert relogio.esperas == []
+    c.graphql(CONSULTA, {"o": "b"})
+    assert relogio.esperas == [61.0]
+
+
+def test_graphql_5xx_usa_backoff(tmp_path):
+    c, _, relogio = cliente(tmp_path, RespostaFalsa(502, {"message": "Bad Gateway"}), ok({"data": {"v": 1}}))
+    assert c.graphql(CONSULTA) == {"v": 1}
+    assert relogio.esperas == [1.0]
