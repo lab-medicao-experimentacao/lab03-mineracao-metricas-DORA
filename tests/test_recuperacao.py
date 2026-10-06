@@ -146,6 +146,27 @@ def test_desempate_por_id_quando_created_at_e_igual():
     assert episodio["horas"] == pytest.approx(1.0)
 
 
+def test_falha_reexecutada_depois_do_sucesso_usa_created_at_como_inicio():
+    # A API redefine `run_started_at` no re-run: a falha criada às 10:00 foi reexecutada
+    # às 15:00 (e falhou de novo), depois do sucesso das 11:00–11:10.
+    falha = run(2, "failure", em(10))
+    falha["run_started_at"] = em(15)
+    runs = [run(1, "success", em(9)), falha, run(3, "success", em(11), fim=em(11, 10))]
+    (episodio,) = episodios_recuperacao(runs, FIM_JANELA)
+    assert episodio["inicio"] == em(10)
+    assert episodio["horas"] == pytest.approx(70 / 60)
+
+
+def test_censurado_com_run_started_at_apos_o_fim_da_janela_nao_fica_negativo():
+    fim_janela = em(12)
+    falha = run(2, "failure", em(11))
+    falha["run_started_at"] = em(13)  # reexecutada depois do fim da janela
+    (episodio,) = episodios_recuperacao([run(1, "success", em(9)), falha], fim_janela)
+    assert episodio["censurado"] is True
+    assert episodio["inicio"] == em(11)
+    assert episodio["horas"] == pytest.approx(1.0)
+
+
 def test_sem_runs_nao_ha_dados():
     assert tempo_recuperacao([], FIM_JANELA) == {
         "mediana_horas": None, "n_episodios": 0, "prop_censurados": None,
