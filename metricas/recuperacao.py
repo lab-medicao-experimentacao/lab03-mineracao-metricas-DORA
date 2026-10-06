@@ -22,6 +22,13 @@ def episodios_recuperacao(runs: Iterable[dict], fim_janela: datetime) -> list[di
     (`updated_at` do sucesso), `horas` (fim − início, em horas) e `censurado=False`.
     Episódio sem sucesso posterior até `fim_janela` é censurado: `fim = fim_janela`
     e `horas` é o tempo decorrido até lá (limite inferior do tempo real).
+
+    A API redefine `run_started_at` a cada re-run; se ele ficar depois do
+    `fim` do episódio (duração negativa), o início passa a ser o `created_at` da
+    falha, que não muda no re-run.
+
+    Espera runs já restritos ao default branch, a `event = push` e à janela
+    (ver `metricas.run_valido`).
     """
     por_workflow: dict[int, list[dict]] = defaultdict(list)
     for run in runs:
@@ -32,17 +39,17 @@ def episodios_recuperacao(runs: Iterable[dict], fim_janela: datetime) -> list[di
     for execucoes in por_workflow.values():
         execucoes.sort(key=lambda r: (r["created_at"], r["id"]))
         visto_sucesso = False
-        inicio: datetime | None = None
+        falha: dict | None = None  # primeira falha do episódio aberto
         for run in execucoes:
             if classe_conclusao(run["conclusion"]) == "sucesso":
-                if inicio is not None:
-                    episodios.append(_episodio(inicio, run["updated_at"], censurado=False))
-                    inicio = None
+                if falha is not None:
+                    episodios.append(_episodio(falha, run["updated_at"], censurado=False))
+                    falha = None
                 visto_sucesso = True
-            elif visto_sucesso and inicio is None:
-                inicio = run["run_started_at"]
-        if inicio is not None:
-            episodios.append(_episodio(inicio, fim_janela, censurado=True))
+            elif visto_sucesso and falha is None:
+                falha = run
+        if falha is not None:
+            episodios.append(_episodio(falha, fim_janela, censurado=True))
 
     episodios.sort(key=lambda e: e["inicio"])
     return episodios
@@ -66,7 +73,10 @@ def tempo_recuperacao(runs: Iterable[dict], fim_janela: datetime) -> dict:
     }
 
 
-def _episodio(inicio: datetime, fim: datetime, censurado: bool) -> dict:
+def _episodio(falha: dict, fim: datetime, censurado: bool) -> dict:
+    inicio = falha["run_started_at"]
+    if inicio > fim:  # run reexecutado depois do fim do episódio
+        inicio = falha["created_at"]
     return {
         "inicio": inicio,
         "fim": fim,
