@@ -74,6 +74,11 @@ Os coletores de releases e commits exportam `data/processed/releases.csv`
 e `data/processed/commits.csv` (`full_name`, `tag_name`, `sha`,
 `author_date`, `message`). As datas são gravadas em ISO 8601 UTC. Releases
 anteriores à janela são preservadas para servir de base ao cálculo de lead time.
+As datas das tags vêm da API GraphQL (1 ponto por 100 tags, em vez de uma chamada REST
+por tag). Releases da janela cujo `compare` não pôde ser calculado (primeira release da
+história, 404 de tag apagada/reescrita, 422 ou 5xx persistente) ficam em
+`data/processed/releases_sem_compare.csv` (`full_name`, `tag_name`, `motivo`), e os meses
+de runs que bateram o teto de 1.000 resultados, em `data/processed/runs_meses_saturados.csv`.
 
 ## Testes
 

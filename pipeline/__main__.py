@@ -90,13 +90,21 @@ def executar(cliente: ClienteGitHub, config: Config, avaliar_todos: bool = False
         config.dir_processados,
     )
 
-    commits_por_repo = {}
-    for nome, rels in releases_por_repo.items():
-        coletados = commits.coletar_commits_entre_releases(cliente, nome, rels, config.janela)
-        commits_por_repo[nome] = coletados.commits_por_release
-    commits.salvar_commits(commits_por_repo, config.dir_processados)
+    resultados_commits = {
+        nome: commits.coletar_commits_entre_releases(cliente, nome, rels, config.janela)
+        for nome, rels in releases_por_repo.items()
+    }
+    commits.salvar_commits(
+        {nome: r.commits_por_release for nome, r in resultados_commits.items()},
+        config.dir_processados,
+    )
+    commits.salvar_releases_sem_compare(resultados_commits, config.dir_processados)
 
     workflow_runs.salvar_runs(runs_de.da_amostra(amostra), config.dir_processados)
+    workflow_runs.salvar_meses_saturados(
+        {r["full_name"]: runs_de.saturados.get(r["full_name"], ()) for r in amostra},
+        config.dir_processados,
+    )
     if runs_de.saturados:
         log.warning(
             "%d repositórios da coleta com meses no teto de 1.000 runs: %s",

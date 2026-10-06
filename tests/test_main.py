@@ -145,6 +145,12 @@ def test_executar_grava_todos_os_artefatos_da_amostra(escrever_config, coleta_fa
     assert len(_linhas(processados / "tags.csv")) == 2
     assert len(_linhas(processados / "commits.csv")) == 2
     assert len(_linhas(processados / "runs.csv")) == 100
+    assert [(l["full_name"], l["periodo"]) for l in _linhas(processados / "runs_meses_saturados.csv")] == [
+        ("o/b", "2025-11-01..2025-11-30"),
+    ]
+    assert sorted((l["full_name"], l["motivo"]) for l in _linhas(processados / "releases_sem_compare.csv")) == [
+        ("o/a", "sem_anterior"), ("o/b", "sem_anterior"),
+    ]
     assert sorted(coleta_falsa["tags"]) == ["o/a", "o/b"]
     assert sorted(coleta_falsa["commits"]) == [("o/a", 5), ("o/b", 5)]
     assert "o/sem-actions" not in coleta_falsa["runs"]

@@ -182,8 +182,10 @@ Unidades: **lead time e recuperação em horas**, frequência em **releases/sema
 | `output/candidatos.csv` | A | todos os candidatos da busca + metadados |
 | `output/funil.csv` | A | `etapa, n_restantes, n_descartados, motivo` |
 | `output/repos.csv` | A | amostra final (100 no S01) com metadados |
-| `data/processed/releases.csv`, `commits.csv` | B | releases e commits por release |
+| `data/processed/releases.csv`, `tags.csv`, `commits.csv` | B | releases, tags (data do commit apontado) e commits por release |
+| `data/processed/releases_sem_compare.csv` | B | releases da janela sem commits calculáveis: `full_name, tag_name, motivo` (`sem_anterior`, `compare_404`, `compare_<status>`) |
 | `data/processed/runs.csv` | C | runs válidos e ignorados (com coluna de classe) |
+| `data/processed/runs_meses_saturados.csv` | C | `full_name, periodo` dos meses que bateram o teto de 1.000 runs (só cabeçalho = nenhum) |
 | `output/dicionario_dados.md` | todos (consolida C no S02) | nome, tipo, unidade, fórmula/origem de cada coluna |
 
 ---
