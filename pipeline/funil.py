@@ -10,6 +10,10 @@ Etapas, da mais barata para a mais cara em cota de API (DIRETRIZES 6.3):
 5. ≥ `min_runs` runs válidos na janela — coleta de workflow runs (#9, C), a mais cara;
 6. amostra: candidatos em ordem aleatória (semente do config) até reunir `tamanho_amostra`.
 
+Um repositório cuja consulta nas etapas 3–5 recebe erro HTTP definitivo (404 apagado/renomeado,
+451 bloqueado, 403 que não é cota…) sai na linha `ETAPA_ACESSIVEL` com o status no motivo, em
+vez de interromper a coleta; erros transitórios ou de credencial (5xx, 401) continuam subindo.
+
 As etapas 3–5 recebem os dados por funções (`usa_actions`, `releases_de`, `runs_de`, cada
 uma recebe o registro Repo) para serem testadas com fixtures agora e ligadas aos coletores
 de B e C depois. As definições de release publicada e de run válido vêm de `metricas/`.
@@ -52,6 +56,7 @@ from pathlib import Path
 from metricas import run_valido
 from metricas.frequencia import releases_publicadas
 from pipeline.config import Config, Janela
+from pipeline.github_client import STATUS_ERRO_CACHEAVEL
 from pipeline.releases import coletar_releases
 from pipeline.selecao import ClienteGitHub, corpo_json
 
@@ -64,6 +69,7 @@ COLUNAS_FUNIL = ("etapa", "n_restantes", "n_descartados", "motivo")  # contrato 
 ETAPA_CANDIDATOS = "candidatos da busca"
 ETAPA_CADASTRAL = "sem fork e não arquivado"
 ETAPA_AVALIADOS = "avaliados em ordem aleatória"
+ETAPA_ACESSIVEL = "acessível na API"
 ETAPA_ACTIONS = "usa GitHub Actions"
 ETAPA_AMOSTRA = "amostra final"
 
@@ -158,33 +164,32 @@ def executar_funil(
         log.info("nenhum fork entre os candidatos: a Search API omite forks sem `fork:true` na consulta")
 
     elegiveis: list[dict] = []
-    sem_actions = poucas_releases = poucos_runs = avaliados = 0
+    contagem: Counter[str] = Counter()  # motivo de descarte nas etapas 3–5
+    inacessiveis: Counter[int] = Counter()  # status HTTP definitivo → nº de repositórios
+    avaliados = 0
     for repo in ordem_aleatoria(cadastrais, config.semente):
         if not avaliar_todos and len(elegiveis) >= config.tamanho_amostra:
             break
         avaliados += 1
-        nome = repo["full_name"]
-        if not usa_actions(repo):
-            sem_actions += 1
-            log.debug("%s: sem GitHub Actions", nome)
+        try:
+            motivo = _motivo_descarte(repo, config, usa_actions, releases_de, runs_de)
+        except Exception as erro:
+            status = getattr(erro, "status_code", None)
+            if status not in STATUS_ERRO_CACHEAVEL:
+                raise
+            inacessiveis[status] += 1
+            log.warning("%s: descartado, a API respondeu erro definitivo (%s)", repo["full_name"], erro)
             continue
-        n_releases = contar_releases_validas(releases_de(repo), janela)
-        if n_releases < config.min_releases:
-            poucas_releases += 1
-            log.debug("%s: %d releases na janela", nome, n_releases)
-            continue
-        n_runs = contar_runs_validos(runs_de(repo), repo["default_branch"], janela)
-        if n_runs < config.min_runs:
-            poucos_runs += 1
-            log.debug("%s: %d runs válidos na janela", nome, n_runs)
+        if motivo is not None:
+            contagem[motivo] += 1
             continue
         elegiveis.append(repo)
-        log.info("%s elegível (%d/%d)", nome, len(elegiveis), config.tamanho_amostra)
+        log.info("%s elegível (%d/%d)", repo["full_name"], len(elegiveis), config.tamanho_amostra)
 
     amostra = elegiveis[: config.tamanho_amostra]
     etapas = _montar_etapas(
-        config, len(candidatos), excluidos, len(cadastrais), avaliados,
-        sem_actions, poucas_releases, poucos_runs, len(elegiveis), len(amostra),
+        config, len(candidatos), excluidos, len(cadastrais), avaliados, inacessiveis,
+        contagem[ETAPA_ACTIONS], contagem["releases"], contagem["runs"], len(elegiveis), len(amostra),
     )
 
     log.info("%d avaliados de %d candidatos após a etapa 2", avaliados, len(cadastrais))
@@ -196,12 +201,33 @@ def executar_funil(
     return ResultadoFunil(amostra=amostra, etapas=etapas, n_avaliados=avaliados)
 
 
+def _motivo_descarte(
+    repo: dict, config: Config, usa_actions: UsaActions,
+    releases_de: ColetorReleases, runs_de: ColetorRuns,
+) -> str | None:
+    """Etapas 3–5 com curto-circuito: a primeira em que o repo cai, ou None se é elegível."""
+    nome = repo["full_name"]
+    if not usa_actions(repo):
+        log.debug("%s: sem GitHub Actions", nome)
+        return ETAPA_ACTIONS
+    n_releases = contar_releases_validas(releases_de(repo), config.janela)
+    if n_releases < config.min_releases:
+        log.debug("%s: %d releases na janela", nome, n_releases)
+        return "releases"
+    n_runs = contar_runs_validos(runs_de(repo), repo["default_branch"], config.janela)
+    if n_runs < config.min_runs:
+        log.debug("%s: %d runs válidos na janela", nome, n_runs)
+        return "runs"
+    return None
+
+
 def _montar_etapas(
     config: Config,
     n_candidatos: int,
     excluidos: Counter[str],
     n_cadastrais: int,
     n_avaliados: int,
+    inacessiveis: Counter[int],
     sem_actions: int,
     poucas_releases: int,
     poucos_runs: int,
@@ -224,6 +250,9 @@ def _montar_etapas(
         (ETAPA_AVALIADOS, n_cadastrais - n_avaliados,
          f"não avaliados: amostra de {config.tamanho_amostra} completada antes "
          f"(semente {config.semente}); as etapas seguintes contam só os avaliados"),
+        (ETAPA_ACESSIVEL, sum(inacessiveis.values()),
+         "erro HTTP definitivo ao consultar workflows, releases ou runs ("
+         + ("; ".join(f"{s}: {n}" for s, n in sorted(inacessiveis.items())) or "nenhum") + ")"),
         (ETAPA_ACTIONS, sem_actions, "sem workflows (actions/workflows com total_count = 0)"),
         (f">= {config.min_releases} releases publicadas na janela", poucas_releases,
          f"menos de {config.min_releases} releases não draft e não pré-release na janela"),
