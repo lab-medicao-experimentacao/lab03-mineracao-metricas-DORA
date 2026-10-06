@@ -1,7 +1,7 @@
 # Configuração do pipeline — ver DIRETRIZES.md, seções 1 e 4.
 
 janela:
-  # PROVISÓRIO: as datas oficiais serão fixadas pelo professor na abertura do Lab03S01.
+  # Janela de 12 meses decidida pelo grupo (DIRETRIZES, seção 1): fechada e anterior à coleta.
   # Intervalo fechado em dias: [inicio 00:00 UTC, fim 23:59:59 UTC].
   inicio: 2025-10-01
   fim: 2026-09-30

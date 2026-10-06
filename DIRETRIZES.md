@@ -22,27 +22,27 @@
 
 | Decisão | Valor | Responsável / fonte |
 |---|---|---|
-| Janela de observação (início/fim) | `AAAA-MM-DD` a `AAAA-MM-DD` — **aguardando professor** | Professor (abertura do S01) |
+| Janela de observação (início/fim) | **`2025-10-01` a `2026-09-30`** (12 meses, dias inclusivos, UTC; em `config.yaml`). Decisão do grupo: o enunciado exige uma janela de 12 meses; esta é fechada e anterior à coleta, então releases e runs da janela não mudam entre execuções (salvo exclusões/edições feitas pelos próprios projetos), o que mantém a coleta reprodutível. Se o professor fixar outras datas, basta trocar o `config.yaml` | Grupo (#1) |
 | Integrante A | Vitor Costa Vianna | — |
 | Integrante B | `Joaquim` | — |
 | Integrante C | `Gabriel Nogueira Vieira Resende` | — |
 | Link do GitHub Projects | `<preencher>` | A |
-| Excluir forks e repositórios arquivados na busca? | Proposta: **sim** (registrado no funil) | Grupo |
-| Formato do cache | Proposta: **um JSON por requisição** em `data/cache/` | C |
+| Excluir forks e repositórios arquivados na busca? | **Sim**, como etapa 2 do funil (custo zero, motivos contados em `funil.csv`), não como filtro escondido na consulta | Grupo (#3/#5) |
+| Formato do cache | **Um JSON comprimido (gzip) por requisição** em `data/cache/<aa>/<sha256>.json.gz`, gravado de forma atômica; `.json` antigo continua sendo lido | C (#10) |
 | Semente aleatória | `42` (em `config.yaml`, usada em todo sorteio) | Grupo |
 | “1 deploy por mês” em releases/semana | `12 ÷ (365,25 / 7) ≈ 0,23` (`metricas/classificacao.py`) | A (#6) |
-| Forks na busca: a Search API **omite forks por padrão** (só aparecem com `fork:true`) | Hoje a consulta é só `stars:A..B` → a etapa “sem fork” do funil tende a descartar 0. Proposta: decidir se adicionamos `fork:true` à consulta para o funil registrar os forks | A (#3) — validar com o grupo |
+| Forks na busca: a Search API **omite forks por padrão** (só aparecem com `fork:true`) | **Decidido: a consulta leva `fork:true`** (`stars:A..B fork:true`). Justificativa: sem ele os forks somem em silêncio e a etapa “sem fork” registraria 0 sem tê-los visto; com ele a exclusão fica explícita e contada no funil (transparência do funil, mesma população final). Custo: só algumas páginas de busca a mais | A (#3) |
 | `Response.json` no contrato 5.1: atributo ou método? | **Atributo** (corpo já decodificado; `None` se vazio). `Response` também tem `.headers` (só `Link` e `Content-Type`), `.status_code` e `.text`. `pipeline/selecao.py` continua aceitando os dois | C (#2/#10) |
-| Funil sob demanda × completo | `executar_funil` embaralha os candidatos (semente) e avalia Actions/releases/runs só até reunir a amostra; a linha “avaliados em ordem aleatória” registra os não avaliados e as etapas 3–5 contam só os avaliados (proporções estimam as da população). O exemplo da seção 7 do enunciado sugere funil completo: `avaliar_todos=True` gera a mesma amostra com custo máximo. Proposta: sob demanda no S01; completo se a cota/cache permitir | A (#5) — validar com o grupo |
+| Funil sob demanda × completo | **Decidido: sob demanda** (padrão de `python -m pipeline`), no S01 e no S02. Os candidatos das etapas 1–2 são embaralhados com a semente **antes** de olhar qualquer dado e avaliados nessa ordem até completar a amostra; os avaliados são, portanto, uma amostra aleatória simples dos candidatos, e as proporções de descarte das etapas 3–5 estimam as da população. Justificativa: o funil completo custaria uma chamada a `/actions/workflows` por candidato (dezenas de milhares) mais releases e runs de todos os que passam, ou seja, dias de cota, sem mudar a amostra; para 300 no S02 basta aumentar `amostra.tamanho`, porque a ordem é a mesma e os 100 do S01 continuam como prefixo (cache reaproveitado). No artigo, o funil é relatado com as contagens absolutas das etapas 1–2 e as das etapas 3–5 “entre N avaliados” (com as proporções). `--funil-completo` continua disponível. *Ameaças (conclusão):* as proporções das etapas 3–5 são estimativas amostrais; a regra de parada no k-ésimo elegível introduz um viés pequeno | A (#5) |
 | Classificação geral com métrica sem valor (`None`) | Ignorar a métrica e tirar a mediana das restantes; `None` se nenhuma tiver valor | A (#6) — validar com o grupo |
-| Contribuidores quando a API não lista (403 “contributor list is too large”, ex.: `torvalds/linux`) | `contributors = None` (célula vazia em `repos.csv`) + aviso no log; o contrato 5.2 diz `int` → proposta: `int \| None`. Na RQ06 esses repositórios ficam fora dos quartis de contribuidores | A (#4) — validar com o grupo |
+| Contribuidores quando a API não lista (403 “contributor list is too large”, ex.: `torvalds/linux`) | **Decidido: `contributors = None`** (célula vazia em `repos.csv`) + aviso no log; **contrato 5.2 alterado para `int \| None`**. Na RQ06 o repositório fica fora só do fator “contribuidores” (análise por fator, sem descartá-lo das outras RQs) e o n de cada teste é reportado. Justificativa: imputar um número inventaria dado; descartar o repositório inteiro enviesaria a amostra contra os maiores projetos. *Ameaças (interna/conclusão):* o dado falta de forma não aleatória (só nos históricos muito grandes), o que pode subestimar o quartil superior de contribuidores; reportar quantos são | A (#4) |
 | Como o `GitHubClient` (#2) sinaliza HTTP 403/204 | `pipeline/metadados.py` aceita erro como corpo (`{"message": ...}`) ou como exceção com o texto da API (em `str(e)` ou `e.response.text`); 204/corpo vazio → 0 contribuidores. Ajustar quando #2 definir suas exceções. **Definido em #10:** respostas 4xx levantam `ErroHTTP` (`.status_code`, `.response.text`, mensagem da API em `str(e)`); 404/403 (que não é cota) ficam no cache e são repetidos (mesma exceção) sem nova chamada; 204 → `Response.json = None` | A (#4) / C (#2) |
 | Tempo de recuperação (RQ04): ordem dos runs e falhas iniciais | Ordena por `created_at` (desempate por `id`) dentro de cada `workflow_id`. Segue a letra do enunciado: episódio começa na primeira falha **após um sucesso**; falhas antes do primeiro sucesso da janela não abrem episódio (não se sabe quando começaram). Censurados entram na mediana com o tempo até `fim_janela` (limite inferior) e sua proporção é reportada | C (#12) — validar com o grupo |
 | Mês de workflow runs que bate o teto de 1.000 | Hoje só avisa (log) e registra o período em `RunsColetados.saturados`; o mês segue com os 1.000 runs entregues. Subdividir o mês (semanas/dias) só se o aviso aparecer na coleta real | C (#9) — validar com o grupo |
 | Idade do repositório (`idade_dias`) | `(janela.fim − created_at)` em dias inteiros, arredondado para baixo, com `janela.fim` **exclusivo** (00:00 UTC do dia seguinte ao último dia da janela) — 1 dia a mais que usar o último dia às 00:00 | A (#4) — validar com o grupo |
 | Contribuidores com `anon=true` | Conta também autores sem conta no GitHub (só e-mail); o mesmo autor com e-mails diferentes conta mais de uma vez | A (#4) — enunciado manda `anon=true` |
 
-Enquanto a janela não for divulgada, use em desenvolvimento `2025-10-01` a `2026-09-30` **apenas em `config.yaml`** — nunca hard-coded.
+A janela vive **apenas em `config.yaml`** — nunca hard-coded.
 
 ---
 
@@ -141,7 +141,8 @@ Até C entregar a versão completa, existe um **stub mínimo** (sem cache/rate l
 
 ```python
 Repo     = {"full_name": str, "default_branch": str, "stars": int, "language": str | None,
-            "created_at": datetime, "contributors": int, "fork": bool, "archived": bool}
+            "created_at": datetime, "contributors": int | None, "fork": bool, "archived": bool}
+           # contributors None = a API não lista (403 "too large"); ver seção 1
 Release  = {"tag_name": str, "published_at": datetime, "draft": bool, "prerelease": bool}
 Commit   = {"sha": str, "author_date": datetime, "message": str}
 Run      = {"id": int, "workflow_id": int, "event": str, "head_branch": str,
