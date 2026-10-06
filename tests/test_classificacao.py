@@ -139,6 +139,12 @@ def test_classificacao_geral_ignora_metricas_sem_valor():
     assert classificacao_geral(["Elite", None, "High", None]) == "High"  # mediana 3,5 → 3
 
 
+def test_classificacao_geral_trata_nan_como_metrica_sem_valor():
+    # categoria vazia num CSV lido pelo pandas vira NaN (S03, RQ 07)
+    nan = float("nan")
+    assert classificacao_geral(["Elite", "High", "High", nan]) == "High"
+
+
 def test_classificacao_geral_sem_nenhuma_metrica():
     assert classificacao_geral([None, None, None, None]) is None
 

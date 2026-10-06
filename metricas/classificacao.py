@@ -104,11 +104,12 @@ def classificar_metrica(nome: str, valor: float | None) -> str | None:
 def classificacao_geral(categorias: Iterable[str | None]) -> str | None:
     """Mediana dos pontos (Elite=4 … Low=1), arredondada para baixo.
 
-    Métricas sem valor (None) são ignoradas; retorna None se nenhuma tiver valor.
+    Métricas sem valor (None ou NaN do pandas) são ignoradas; retorna None se
+    nenhuma tiver valor.
     """
     pontos = []
     for categoria in categorias:
-        if categoria is None:
+        if categoria is None or (isinstance(categoria, float) and math.isnan(categoria)):
             continue
         if categoria not in PONTOS:
             raise ValueError(f"categoria inválida: {categoria!r}")
