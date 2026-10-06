@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import tempfile
@@ -40,7 +41,10 @@ VERSAO_API = "2022-11-28"
 MAX_TENTATIVAS = 5          # tentativas por requisição em 5xx/falha de rede
 ESPERA_BASE_S = 1.0         # 1 s, 2 s, 4 s, 8 s…
 MAX_ESPERAS_COTA = 5        # esperas por limite de cota numa mesma requisição
-ESPERA_LIMITE_SECUNDARIO_S = 60.0  # quando a API não diz quanto esperar
+ESPERA_LIMITE_SECUNDARIO_S = 60.0  # quando a API não diz quanto esperar (dobra a cada repetição)
+ESPERA_SECUNDARIA = float("nan")   # sentinela: limite sem prazo informado pela API
+# Mensagens de 403 que indicam limite (secundário) e não erro definitivo.
+TERMOS_LIMITE_SECUNDARIO = ("rate limit", "abuse detection")
 FOLGA_RENOVACAO_S = 1.0     # segundos extras depois do `X-RateLimit-Reset`
 TIMEOUT_S = 30.0
 INTERVALO_PROGRESSO = 100   # loga a cada N requisições feitas à rede
@@ -190,11 +194,14 @@ class GitHubClient:
                 continue
 
             if bruta.status_code in (403, 429):
-                espera = self._espera_por_limite(resposta, bruta.headers)
+                espera = self._espera_por_limite(resposta, bruta.headers, bruta.status_code)
                 if espera is not None:
                     esperas_cota += 1
                     if esperas_cota > MAX_ESPERAS_COTA:
                         raise ErroHTTP(resposta, rotulo)
+                    if math.isnan(espera):
+                        # sem prazo informado: 60 s, 120 s, 240 s… (boas práticas da API)
+                        espera = ESPERA_LIMITE_SECUNDARIO_S * 2 ** (esperas_cota - 1)
                     log.warning("limite de cota atingido em %s: aguardando %.0f s", rotulo, espera)
                     # a espera já cobre a renovação: evita dormir de novo em _aguardar_cota
                     recurso = _cabecalho(bruta.headers, "X-RateLimit-Resource") or _recurso_presumido(path)
@@ -230,8 +237,14 @@ class GitHubClient:
             self._dormir(espera)
         del self._cota[recurso]
 
-    def _espera_por_limite(self, resposta: Response, headers: Mapping[str, str]) -> float | None:
-        """Segundos a esperar se o 403/429 é limite de cota; None se é outro erro."""
+    def _espera_por_limite(
+        self, resposta: Response, headers: Mapping[str, str], status: int
+    ) -> float | None:
+        """Segundos a esperar se o 403/429 é limite de cota; None se é outro erro.
+
+        Devolve `ESPERA_SECUNDARIA` quando é limite mas a API não diz até quando
+        (limite secundário): quem chama aplica a espera crescente.
+        """
         retry_after = _inteiro(_cabecalho(headers, "Retry-After"))
         if retry_after is not None:
             return float(retry_after) + FOLGA_RENOVACAO_S
@@ -239,9 +252,10 @@ class GitHubClient:
             renovacao = _inteiro(_cabecalho(headers, "X-RateLimit-Reset"))
             if renovacao is not None:
                 return max(renovacao - self._agora(), 0.0) + FOLGA_RENOVACAO_S
-            return ESPERA_LIMITE_SECUNDARIO_S
-        if "rate limit" in _mensagem_da_api(resposta).lower():
-            return ESPERA_LIMITE_SECUNDARIO_S
+            return ESPERA_SECUNDARIA
+        mensagem = _mensagem_da_api(resposta).lower()
+        if status == 429 or any(termo in mensagem for termo in TERMOS_LIMITE_SECUNDARIO):
+            return ESPERA_SECUNDARIA
         return None
 
     # --- cache --------------------------------------------------------------------

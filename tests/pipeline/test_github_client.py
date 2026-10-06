@@ -324,6 +324,27 @@ def test_403_de_limite_sem_cabecalhos_espera_60s(tmp_path):
     assert relogio.esperas == [60.0]
 
 
+def test_429_sem_cabecalhos_nem_mensagem_e_limite_e_espera(tmp_path):
+    c, sessao, relogio = cliente(tmp_path, RespostaFalsa(429, bruto=b""), ok({"v": 1}))
+    assert c.get("/x").json == {"v": 1}
+    assert relogio.esperas == [60.0]
+    assert len(sessao.chamadas) == 2
+
+
+def test_403_de_abuse_detection_e_limite_secundario(tmp_path):
+    limite = RespostaFalsa(403, {"message": "You have triggered an abuse detection mechanism."})
+    c, _, relogio = cliente(tmp_path, limite, ok({"v": 1}))
+    assert c.get("/x").json == {"v": 1}
+    assert relogio.esperas == [60.0]
+
+
+def test_limite_secundario_repetido_espera_cada_vez_mais(tmp_path):
+    limite = RespostaFalsa(403, {"message": "You have exceeded a secondary rate limit."})
+    c, _, relogio = cliente(tmp_path, limite, limite, limite, ok({"v": 1}))
+    assert c.get("/x").json == {"v": 1}
+    assert relogio.esperas == [60.0, 120.0, 240.0]
+
+
 def test_403_de_cota_nao_e_guardado_no_cache(tmp_path):
     limite = RespostaFalsa(403, {"message": "API rate limit exceeded"},
                            {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1030"})
