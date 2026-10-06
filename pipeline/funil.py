@@ -39,8 +39,8 @@ encher; os demais nunca são consultados. Como as contagens continuam significat
 Regenerar o funil sem novas chamadas é responsabilidade do cliente (#10): toda consulta passa
 pelo `GitHubClient`/coletores, e a mesma semente reavalia exatamente os mesmos candidatos.
 
-Forks: a Search API omite forks sem `fork:true` na consulta (DIRETRIZES, seção 1), então hoje
-a etapa 2 descarta 0 forks — o funil registra "fork: 0" e o log avisa.
+Forks: a busca (#3) usa `fork:true`, então os forks chegam como candidatos e a etapa 2 os
+conta e descarta explicitamente (DIRETRIZES, seção 1).
 """
 
 from __future__ import annotations
@@ -160,8 +160,6 @@ def executar_funil(
             cadastrais.append(repo)
         else:
             excluidos[motivo] += 1
-    if config.excluir_forks and candidatos and not any(r["fork"] for r in candidatos):
-        log.info("nenhum fork entre os candidatos: a Search API omite forks sem `fork:true` na consulta")
 
     elegiveis: list[dict] = []
     contagem: Counter[str] = Counter()  # motivo de descarte nas etapas 3–5

@@ -2,7 +2,9 @@
 
 A Search API devolve no máximo 1.000 resultados por consulta; faixas que passam
 disso são subdivididas ao meio, recursivamente, até caberem no teto.
-Forks e arquivados NÃO são filtrados aqui: a exclusão é uma etapa do funil (#5).
+Forks e arquivados NÃO são filtrados aqui: a exclusão é uma etapa do funil (#5). A
+consulta leva `fork:true` porque, sem ele, a Search API omite os forks em silêncio e o
+funil registraria "fork: 0" sem que eles tivessem sido vistos.
 Contribuidores ficam de fora do registro: são coletados na Issue #4.
 """
 
@@ -22,6 +24,9 @@ log = logging.getLogger(__name__)
 CAMINHO_BUSCA = "/search/repositories"
 TETO_BUSCA = 1000  # limite fixo da Search API por consulta (não é parâmetro do estudo)
 POR_PAGINA = 100   # máximo aceito pela API
+# A Search API omite forks sem este qualificador; com ele os forks entram como candidatos
+# e a etapa 2 do funil registra quantos foram descartados (transparência do funil).
+QUALIFICADOR_FORKS = "fork:true"
 ARQUIVO_CANDIDATOS = "candidatos.csv"
 COLUNAS_CANDIDATOS = (
     "full_name", "default_branch", "stars", "language", "created_at", "fork", "archived",
@@ -133,7 +138,8 @@ def buscar_candidatos(cliente: ClienteGitHub, faixas: Iterable[FaixaEstrelas]) -
 
 
 def _parametros(faixa: FaixaEstrelas, por_pagina: int) -> dict:
-    return {"q": faixa.consulta(), "sort": "stars", "order": "desc", "per_page": por_pagina}
+    consulta = f"{faixa.consulta()} {QUALIFICADOR_FORKS}"
+    return {"q": consulta, "sort": "stars", "order": "desc", "per_page": por_pagina}
 
 
 def _consultar(cliente: ClienteGitHub, faixa: FaixaEstrelas, por_pagina: int) -> dict:

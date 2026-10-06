@@ -273,15 +273,10 @@ def test_filtro_cadastral_desativado_no_config():
     assert sorted(nomes(resultado.amostra)) == ["a/arq", "a/fork"]
 
 
-def test_busca_sem_forks_registra_zero_descartados_e_avisa(caplog):
-    """A Search API omite forks sem `fork:true`: a etapa existe, mas descarta 0 forks."""
-    with caplog.at_level(logging.INFO, logger="pipeline.funil"):
-        resultado = rodar([repo("a/x"), repo("b/y")], Fontes())
-
-    etapa = por_etapa(resultado)[ETAPA_CADASTRAL]
+def test_sem_forks_entre_os_candidatos_a_etapa_registra_zero():
+    etapa = por_etapa(rodar([repo("a/x"), repo("b/y")], Fontes()))[ETAPA_CADASTRAL]
     assert etapa.n_descartados == 0
     assert "fork: 0" in etapa.motivo
-    assert any("fork:true" in r.getMessage() for r in caplog.records)
 
 
 def test_todos_descartados_na_etapa_cadastral():
