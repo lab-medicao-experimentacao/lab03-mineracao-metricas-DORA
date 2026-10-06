@@ -5,7 +5,11 @@ from datetime import datetime, timezone
 
 import pytest
 
-from pipeline.commits import coletar_commits_entre_releases, salvar_commits
+from pipeline.commits import (
+    coletar_commits_entre_releases,
+    salvar_commits,
+    salvar_releases_sem_compare,
+)
 from pipeline.config import Janela
 
 
@@ -26,6 +30,7 @@ def commit(sha, data_autor):
 class ErroHTTP(Exception):
     def __init__(self, status):
         self.response = type("Resposta", (), {"status_code": status})()
+        self.status_code = status
 
 
 class ClienteFalso:
@@ -90,9 +95,43 @@ def test_prerelease_e_draft_nao_entram_na_cadeia_principal():
     assert cliente.chamadas == [(caminho, {"per_page": 100}, "commits")]
 
 
-def test_erro_diferente_de_404_e_propagado():
+@pytest.mark.parametrize("status", [422, 500, 502])
+def test_compare_que_a_api_nao_calcula_e_registrado_com_o_status(status):
     caminho = "/repos/org/repo/compare/v1...v2"
-    cliente = ClienteFalso({caminho: ErroHTTP(500)})
+    cliente = ClienteFalso({caminho: ErroHTTP(status)})
+    resultado = coletar_commits_entre_releases(
+        cliente, "org/repo", [release("v1", data(1)), release("v2", data(2))],
+        Janela(data(1), data(31)),
+    )
+    assert resultado.commits_por_release == {}
+    assert resultado.releases_com_404 == ()
+    assert resultado.releases_com_erro == (("v2", status),)
+
+
+def test_releases_sem_compare_sao_salvas_com_o_motivo(tmp_path):
+    cliente = ClienteFalso({
+        "/repos/org/repo/compare/v1...v2": ErroHTTP(404),
+        "/repos/org/repo/compare/v2...v3": ErroHTTP(422),
+        "/repos/org/repo/compare/v3...v4": [],
+    })
+    resultado = coletar_commits_entre_releases(cliente, "org/repo", [
+        release("v1", data(1)), release("v2", data(2)), release("v3", data(3)), release("v4", data(4)),
+    ], Janela(data(1), data(31)))
+
+    caminho = salvar_releases_sem_compare({"org/repo": resultado}, tmp_path)
+
+    with caminho.open(encoding="utf-8", newline="") as arquivo:
+        linhas = list(csv.DictReader(arquivo))
+    assert [(l["full_name"], l["tag_name"], l["motivo"]) for l in linhas] == [
+        ("org/repo", "v1", "sem_anterior"),
+        ("org/repo", "v2", "compare_404"),
+        ("org/repo", "v3", "compare_422"),
+    ]
+
+
+def test_erro_de_credencial_e_propagado():
+    caminho = "/repos/org/repo/compare/v1...v2"
+    cliente = ClienteFalso({caminho: ErroHTTP(401)})
     with pytest.raises(ErroHTTP):
         coletar_commits_entre_releases(
             cliente, "org/repo", [release("v1", data(1)), release("v2", data(2))],
