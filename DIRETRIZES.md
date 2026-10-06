@@ -24,8 +24,8 @@
 |---|---|---|
 | Janela de observação (início/fim) | `AAAA-MM-DD` a `AAAA-MM-DD` — **aguardando professor** | Professor (abertura do S01) |
 | Integrante A | Vitor Costa Vianna | — |
-| Integrante B | `<preencher>` | — |
-| Integrante C | `<preencher>` | — |
+| Integrante B | `Joaquim` | — |
+| Integrante C | `Gabriel Nogueira Vieira Resende` | — |
 | Link do GitHub Projects | `<preencher>` | A |
 | Excluir forks e repositórios arquivados na busca? | Proposta: **sim** (registrado no funil) | Grupo |
 | Formato do cache | Proposta: **um JSON por requisição** em `data/cache/` | C |
