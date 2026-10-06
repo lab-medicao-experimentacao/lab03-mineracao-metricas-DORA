@@ -3,7 +3,7 @@
 Contrato 5.1 das DIRETRIZES: `get` devolve um `Response` (`.json`, `.headers`) e
 `get_paginated` segue o cabeçalho `Link rel="next"`.
 
-- Cache: um JSON por requisição em `cache_dir/<aa>/<sha256>.json`. Rodar de novo
+- Cache: um JSON comprimido (gzip) por requisição em `cache_dir/<aa>/<sha256>.json.gz`. Rodar de novo
   retoma de onde parou, sem repetir chamadas. Erros definitivos (404, 403 que não
   é limite de cota, 409, 410, 422, 451) também são guardados; 5xx e limite de
   cota nunca são.
@@ -16,6 +16,7 @@ Contrato 5.1 das DIRETRIZES: `get` devolve um `Response` (`.json`, `.headers`) e
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import logging
@@ -51,6 +52,9 @@ INTERVALO_PROGRESSO = 100   # loga a cada N requisições feitas à rede
 
 # Erros 4xx que se repetem sempre: valem a pena no cache (p. ex. compare 404).
 STATUS_ERRO_CACHEAVEL = frozenset({403, 404, 409, 410, 422, 451})
+# JSON comprimido: páginas de releases, runs e compare passam de 500 KB cada em texto.
+SUFIXO_CACHE = ".json.gz"
+NIVEL_GZIP = 6
 # Só estes cabeçalhos são guardados: o resto (cookies, cota) não serve à retomada.
 CABECALHOS_GUARDADOS = ("Link", "Content-Type")
 
@@ -262,23 +266,36 @@ class GitHubClient:
 
     def _arquivo_cache(self, path: str, parametros: dict[str, str]) -> Path:
         consulta = urlencode(sorted(parametros.items()))
-        chave = hashlib.sha256(f"GET {path}?{consulta}".encode()).hexdigest()
-        return self._cache_dir / chave[:2] / f"{chave}.json"
+        return self._arquivo_da_chave(f"GET {path}?{consulta}")
+
+    def _arquivo_da_chave(self, requisicao: str) -> Path:
+        chave = hashlib.sha256(requisicao.encode()).hexdigest()
+        return self._cache_dir / chave[:2] / f"{chave}{SUFIXO_CACHE}"
 
     def _ler_cache(self, arquivo: Path) -> Response | None:
-        try:
-            registro = json.loads(arquivo.read_text(encoding="utf-8"))
-            return Response(
-                json=registro["body"],
-                headers=dict(registro["headers"]),
-                status_code=int(registro["status_code"]),
-                text=registro.get("text", ""),
-            )
-        except FileNotFoundError:
+        """Resposta guardada, ou None. Aceita também o formato antigo (`.json` sem gzip)."""
+        antigo = arquivo.with_name(arquivo.name.removesuffix(".gz"))
+        for candidato, comprimido in ((arquivo, True), (antigo, False)):
+            try:
+                bruto = candidato.read_bytes()
+            except FileNotFoundError:
+                continue
+            except OSError:
+                break
+            try:
+                registro = json.loads(gzip.decompress(bruto) if comprimido else bruto)
+                return Response(
+                    json=registro["body"],
+                    headers=dict(registro["headers"]),
+                    status_code=int(registro["status_code"]),
+                    text=registro.get("text", ""),
+                )
+            except (OSError, EOFError, ValueError, KeyError, TypeError):
+                break
+        else:
             return None
-        except (OSError, ValueError, KeyError, TypeError):
-            log.warning("cache ilegível descartado: %s", arquivo.name)
-            return None
+        log.warning("cache ilegível descartado: %s", arquivo.name)
+        return None
 
     def _gravar_cache(
         self, arquivo: Path, path: str, parametros: dict[str, str], resposta: Response
@@ -292,11 +309,14 @@ class GitHubClient:
             "body": resposta.json,
             "text": resposta.text,
         }
+        dados = gzip.compress(
+            json.dumps(registro, ensure_ascii=False).encode("utf-8"), compresslevel=NIVEL_GZIP
+        )
         arquivo.parent.mkdir(parents=True, exist_ok=True)
         descritor, temporario = tempfile.mkstemp(dir=arquivo.parent, suffix=".tmp")
         try:
-            with os.fdopen(descritor, "w", encoding="utf-8") as f:
-                json.dump(registro, f, ensure_ascii=False)
+            with os.fdopen(descritor, "wb") as f:
+                f.write(dados)
             os.replace(temporario, arquivo)
         except BaseException:
             Path(temporario).unlink(missing_ok=True)

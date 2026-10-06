@@ -1,5 +1,6 @@
 """GitHubClient com sessão HTTP falsa: sem rede, sem espera real."""
 
+import gzip
 import json
 import logging
 
@@ -73,6 +74,14 @@ def ok(corpo, **headers):
     return RespostaFalsa(200, corpo, headers)
 
 
+def arquivos_cache(tmp_path):
+    return sorted((tmp_path / "cache").rglob("*.json*"))
+
+
+def ler_registro(arquivo):
+    return json.loads(gzip.decompress(arquivo.read_bytes()))
+
+
 # --- contrato básico -------------------------------------------------------------------
 
 
@@ -92,8 +101,8 @@ def test_token_nao_aparece_no_repr_nem_no_cache(tmp_path):
     c, _, _ = cliente(tmp_path, ok({"a": 1}))
     c.get("/repos/o/r")
     assert TOKEN not in repr(c)
-    for arquivo in (tmp_path / "cache").rglob("*.json"):
-        assert TOKEN not in arquivo.read_text()
+    for arquivo in arquivos_cache(tmp_path):
+        assert TOKEN not in json.dumps(ler_registro(arquivo))
 
 
 def test_token_vazio_e_recusado(tmp_path):
@@ -164,8 +173,8 @@ def test_booleano_vai_como_texto_minusculo(tmp_path):
 def test_cache_corrompido_e_refeito(tmp_path, caplog):
     c, _, _ = cliente(tmp_path, ok({"v": 1}))
     c.get("/x")
-    (arquivo,) = (tmp_path / "cache").rglob("*.json")
-    arquivo.write_text("{meio")
+    (arquivo,) = arquivos_cache(tmp_path)
+    arquivo.write_bytes(gzip.compress(b"{meio"))
 
     c2, sessao2, _ = cliente(tmp_path, ok({"v": 2}))
     with caplog.at_level(logging.WARNING):
@@ -180,11 +189,36 @@ def test_interrupcao_na_gravacao_nao_deixa_arquivo_parcial(tmp_path, monkeypatch
     def interrompe(*args, **kwargs):
         raise KeyboardInterrupt
 
-    monkeypatch.setattr("pipeline.github_client.json.dump", interrompe)
+    monkeypatch.setattr("pipeline.github_client.os.replace", interrompe)
     with pytest.raises(KeyboardInterrupt):
         c.get("/x")
-    assert not list((tmp_path / "cache").rglob("*.json"))
+    assert arquivos_cache(tmp_path) == []
     assert not list((tmp_path / "cache").rglob("*.tmp"))
+
+
+def test_cache_e_gravado_comprimido_com_a_requisicao_e_o_corpo(tmp_path):
+    c, _, _ = cliente(tmp_path, ok({"v": 1}, Link='<x>; rel="next"'))
+    c.get("/repos/o/r", {"per_page": 1})
+    (arquivo,) = arquivos_cache(tmp_path)
+    assert arquivo.name.endswith(".json.gz")
+    registro = ler_registro(arquivo)
+    assert registro["path"] == "/repos/o/r"
+    assert registro["params"] == {"per_page": "1"}
+    assert registro["body"] == {"v": 1}
+    assert registro["headers"] == {"Link": '<x>; rel="next"'}
+
+
+def test_cache_antigo_em_json_sem_compressao_continua_valendo(tmp_path):
+    c1, _, _ = cliente(tmp_path, ok({"v": 1}))
+    c1.get("/x")
+    (comprimido,) = arquivos_cache(tmp_path)
+    antigo = comprimido.with_name(comprimido.name.removesuffix(".gz"))
+    antigo.write_text(json.dumps(ler_registro(comprimido)), encoding="utf-8")
+    comprimido.unlink()
+
+    c2, sessao2, _ = cliente(tmp_path)
+    assert c2.get("/x").json == {"v": 1}
+    assert sessao2.chamadas == []
 
 
 # --- erros -----------------------------------------------------------------------------
@@ -350,8 +384,8 @@ def test_403_de_cota_nao_e_guardado_no_cache(tmp_path):
                            {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1030"})
     c, _, _ = cliente(tmp_path, limite, ok({"v": 1}), relogio=Relogio(1_000.0))
     c.get("/x")
-    (arquivo,) = (tmp_path / "cache").rglob("*.json")
-    assert json.loads(arquivo.read_text())["status_code"] == 200
+    (arquivo,) = arquivos_cache(tmp_path)
+    assert ler_registro(arquivo)["status_code"] == 200
 
 
 def test_403_de_cota_repetido_desiste_apos_o_limite_de_esperas(tmp_path):

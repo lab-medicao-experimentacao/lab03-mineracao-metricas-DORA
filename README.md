@@ -55,10 +55,12 @@ Os parâmetros do estudo (janela de observação, faixas de estrelas, critérios
 | `output/` | funil de seleção, dataset final e dicionário de dados | sim |
 
 O `GitHubClient` (`pipeline/github_client.py`) grava cada resposta da API em
-`data/cache/<aa>/<sha256>.json`; ao rodar de novo (ou após `Ctrl+C`), o que já foi
+`data/cache/<aa>/<sha256>.json.gz` (JSON comprimido com gzip; a gravação é atômica, então
+um `Ctrl+C` no meio não deixa arquivo pela metade); ao rodar de novo, o que já foi
 baixado não é requisitado outra vez. Ele espera a renovação da cota quando
-`X-RateLimit-Remaining` chega a 0 e repete erros 5xx com espera de 1 s, 2 s, 4 s, 8 s…
-Para recomeçar do zero, apague `data/cache/`.
+`X-RateLimit-Remaining` chega a 0 (ou a API responde 403/429 de limite, inclusive o
+secundário: `Retry-After` ou 60 s, 120 s, 240 s…) e repete erros 5xx e falhas de rede com
+espera de 1 s, 2 s, 4 s, 8 s… Para recomeçar do zero, apague `data/cache/`.
 
 O coletor de workflow runs (`pipeline/workflow_runs.py`) consulta um mês por vez
 (push no default branch) e avisa, no log, se algum mês atingir o teto de 1.000
