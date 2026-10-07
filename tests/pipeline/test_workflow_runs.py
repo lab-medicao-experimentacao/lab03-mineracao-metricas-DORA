@@ -7,16 +7,13 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from metricas import CONCLUSOES_FALHA, CONCLUSOES_SUCESSO, classe_conclusao
 from pipeline.config import Janela
 from pipeline.funil import contar_runs_validos
-from pipeline.github_client import ErroHTTP, GitHubClient, Response
+from pipeline.github_client import GitHubClient, Response
 from pipeline.workflow_runs import (
-    CONCLUSOES_CONTADAS,
     TETO_RUNS,
     RunsColetados,
     coletar_runs,
-    contar_runs_validos_api,
     converter_run,
     fatias_mensais,
     filtro_created,
@@ -311,66 +308,7 @@ def test_da_amostra_segue_a_ordem_da_amostra():
     assert list(coletor.da_amostra([outra, REPO])) == ["org/outra", "org/repo"]
 
 
-# --- pré-filtro por contagem (total_count) ----------------------------------------------
-
-
-def test_contagem_faz_uma_consulta_per_page_1_por_conclusao_valida():
-    api = ApiRunsFalsa([
-        item(1, "2025-10-05T00:00:00Z", "success"),
-        item(2, "2025-11-05T00:00:00Z", "failure"),
-        item(3, "2025-12-05T00:00:00Z", "timed_out"),
-        item(4, "2026-01-05T00:00:00Z", "startup_failure"),
-        item(5, "2026-02-05T00:00:00Z", "cancelled"),
-    ])
-
-    assert contar_runs_validos_api(api, "org/repo", "main", JANELA) == 4
-
-    consultas = [params for _, _, params in api.chamadas]
-    assert [p["status"] for p in consultas] == list(CONCLUSOES_CONTADAS)
-    for params in consultas:
-        assert params == {
-            "branch": "main", "event": "push", "created": "2025-10-01..2026-09-30",
-            "status": params["status"], "per_page": 1,
-        }
-    assert {c for _, c, _ in api.chamadas} == {"/repos/org/repo/actions/runs"}
-
-
-def test_conclusoes_contadas_sao_exatamente_as_validas_do_enunciado():
-    assert set(CONCLUSOES_CONTADAS) == CONCLUSOES_SUCESSO | CONCLUSOES_FALHA
-    assert set(CONCLUSOES_CONTADAS) == {"success", "failure", "timed_out", "startup_failure"}
-    assert len(CONCLUSOES_CONTADAS) == len(set(CONCLUSOES_CONTADAS))
-    for ignorada in ("cancelled", "skipped", "neutral", "action_required", "stale", None):
-        assert classe_conclusao(ignorada) == "ignorado"
-    assert all(classe_conclusao(c) != "ignorado" for c in CONCLUSOES_CONTADAS)
-
-
-def test_contagem_para_ao_atingir_o_limiar():
-    api = ApiRunsFalsa([item(i, "2025-10-05T00:00:00Z") for i in range(60)])
-    assert contar_runs_validos_api(api, "org/repo", "main", JANELA, parar_em=50) == 60
-    assert len(api.chamadas) == 1  # success já basta: as outras conclusões não mudam a decisão
-
-
-def test_contagem_abaixo_do_limiar_consulta_todas_as_conclusoes():
-    api = ApiRunsFalsa([item(i, "2025-10-05T00:00:00Z") for i in range(49)])
-    assert contar_runs_validos_api(api, "org/repo", "main", JANELA, parar_em=50) == 49
-    assert len(api.chamadas) == len(CONCLUSOES_CONTADAS)
-
-
-def test_filtro_recusado_pela_api_devolve_none():
-    class ApiQueRecusa(ApiRunsFalsa):
-        def get(self, path, params=None):
-            raise ErroHTTP(Response({"message": "Validation Failed"}, status_code=422), "GET runs")
-
-    assert contar_runs_validos_api(ApiQueRecusa([]), "org/repo", "main", JANELA) is None
-
-
-def test_erro_definitivo_na_contagem_sobe_para_o_funil():
-    class ApiSemRepo(ApiRunsFalsa):
-        def get(self, path, params=None):
-            raise ErroHTTP(Response({"message": "Not Found"}, status_code=404), "GET runs")
-
-    with pytest.raises(ErroHTTP):
-        contar_runs_validos_api(ApiSemRepo([]), "org/repo", "main", JANELA)
+# --- runs nos limites da janela -------------------------------------------------------
 
 
 def _runs_variados() -> list[dict]:
@@ -389,24 +327,13 @@ def _runs_variados() -> list[dict]:
     return itens
 
 
-def test_contagem_da_api_coincide_com_a_contagem_local_dos_runs_coletados():
-    """Mesmos filtros (UTC, branch, push, conclusões válidas): pré-filtro == critério antigo."""
-    api = ApiRunsFalsa(_runs_variados())
-    locais = contar_runs_validos(coletar_runs(api, "org/repo", "main", JANELA).runs, "main", JANELA)
-    assert locais == 5 * 4  # 5 instantes dentro da janela × 4 conclusões válidas
-    assert contar_runs_validos_api(api, "org/repo", "main", JANELA) == locais
-
-
-def test_contagem_limitada_pela_api_continua_acima_do_limiar():
-    api = ApiRunsFalsa([item(i, "2025-10-05T00:00:00Z") for i in range(3000)], total_maximo=2500)
-    assert contar_runs_validos_api(api, "org/repo", "main", JANELA, parar_em=50) >= 50
-
-
-def test_coletor_teto_usa_o_limiar_do_coletor():
-    api = ApiRunsFalsa([item(i, "2025-10-05T00:00:00Z") for i in range(60)])
-    coletor = RunsColetados(api, JANELA, limiar=50)
-    assert coletor.teto(REPO) == 60
-    assert len(api.chamadas) == 1
+def test_etapa_5_decide_igual_com_a_janela_inteira_e_mes_a_mes():
+    """A contagem local (critério do funil) não depende do caminho da coleta."""
+    itens = _runs_variados()
+    pela_janela = coletar_runs(ApiRunsFalsa(itens), "org/repo", "main", JANELA).runs
+    por_mes = coletar_runs(ApiRunsFalsa(itens), "org/repo", "main", JANELA, fatiar_sempre=True).runs
+    assert contar_runs_validos(pela_janela, "main", JANELA) == 5 * 4  # 5 instantes × 4 conclusões
+    assert contar_runs_validos(por_mes, "main", JANELA) == 5 * 4
 
 
 # --- runs.csv --------------------------------------------------------------------------
