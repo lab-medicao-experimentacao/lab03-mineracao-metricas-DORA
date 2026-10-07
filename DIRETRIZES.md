@@ -77,9 +77,10 @@ A janela vive **apenas em `config.yaml`** — nunca hard-coded.
 │   ├── selecao.py             # busca de candidatos fatiada         [A]
 │   ├── metadados.py           # estrelas, linguagem, contrib., idade[A]
 │   ├── funil.py               # filtros + tabela do funil           [A]
+│   ├── paralelo.py            # execução concorrente em ordem (#10) [A]
 │   ├── releases.py            # releases e tags                     [B]
 │   ├── commits.py             # compare entre releases              [B]
-│   └── workflow_runs.py       # runs fatiados por mês               [C]
+│   └── workflow_runs.py       # runs da janela (por mês se ≥ 1.000) [C]
 ├── metricas/                  # cálculo PURO (sem rede) — alvo da cobertura
 │   ├── frequencia.py          # deployment frequency (RQ01)         [A]
 │   ├── classificacao.py       # faixas Elite/High/Medium/Low        [A]
@@ -129,6 +130,10 @@ Estes formatos permitem que A, B e C desenvolvam em paralelo. Os módulos de `pi
 ```python
 class GitHubClient:
     def __init__(self, token: str, cache_dir: Path): ...
+        # extensão (#10), só keywords opcionais: max_simultaneas (teto de requisições em voo,
+        # = coleta.workers no __main__) e intervalo_minimo (ritmo global entre partidas)
+    def cancelar(self) -> None
+        # extensão (#10): acorda as esperas e faz toda nova requisição levantar ColetaCancelada (Ctrl+C)
     def get(self, path: str, params: dict | None = None) -> Response
         # Response tem .json (dict|list) e .headers (dict); usa cache; trata rate limit e 5xx
     def get_paginated(self, path: str, params: dict | None = None, item_key: str | None = None) -> list[dict]
