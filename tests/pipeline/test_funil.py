@@ -20,6 +20,7 @@ from pipeline.funil import (
     contar_releases_validas,
     contar_runs_validos,
     executar_funil,
+    limiar_prefiltro_runs,
     motivo_exclusao_cadastral,
     ordem_aleatoria,
     salvar_funil,
@@ -72,6 +73,9 @@ def run(**campos) -> dict:
     return base | campos
 
 
+EXATO = object()  # o pré-filtro conta exatamente os runs válidos do perfil
+
+
 @dataclass
 class Perfil:
     """O que os coletores devolvem para um repositório."""
@@ -79,6 +83,7 @@ class Perfil:
     actions: bool = True
     releases: list[dict] = field(default_factory=lambda: [release()] * 5)
     runs: list[dict] = field(default_factory=lambda: [run()] * 50)
+    teto: object = EXATO  # resposta do pré-filtro de runs (int, None ou EXATO)
 
 
 class Fontes:
@@ -90,6 +95,14 @@ class Fontes:
         self.actions: list[str] = []
         self.releases: list[str] = []
         self.runs: list[str] = []
+        self.tetos: list[str] = []
+
+    def teto_runs(self, r: dict) -> int | None:
+        self.tetos.append(r["full_name"])
+        perfil = self._perfil(r)
+        if perfil.teto is EXATO:
+            return contar_runs_validos(perfil.runs, r["default_branch"], JANELA)
+        return perfil.teto
 
     def _perfil(self, r: dict) -> Perfil:
         return self.perfis.get(r["full_name"], self.padrao)
@@ -687,3 +700,78 @@ def test_erro_nao_definitivo_interrompe_o_funil(status):
 def test_sem_erros_a_etapa_de_acesso_descarta_zero():
     linha = por_etapa(rodar([repo("a/x")], Fontes()))[ETAPA_ACESSIVEL]
     assert linha.n_descartados == 0
+
+
+# --- pré-filtro de runs por contagem (total_count) ----------------------------------------
+
+ETAPA_RUNS = ">= 50 runs válidos na janela"
+
+
+def rodar_com_prefiltro(candidatos, fontes: Fontes, cfg: Config = CONFIG, **kwargs):
+    return rodar(candidatos, fontes, cfg, teto_runs=fontes.teto_runs, **kwargs)
+
+
+def test_limiar_do_prefiltro_tem_folga_abaixo_do_minimo():
+    assert limiar_prefiltro_runs(50) == 45
+    assert limiar_prefiltro_runs(1) == 1
+    assert all(limiar_prefiltro_runs(n) <= n for n in range(1, 200))
+
+
+def test_contagem_bem_abaixo_do_limiar_descarta_sem_coletar_os_runs():
+    fontes = Fontes({"a/poucos": Perfil(teto=44)})
+    resultado = rodar_com_prefiltro([repo("a/poucos"), repo("a/ok")], fontes)
+
+    assert nomes(resultado.amostra) == ["a/ok"]
+    assert "a/poucos" not in fontes.runs  # a coleta completa (cara) não acontece
+    etapa = por_etapa(resultado)[ETAPA_RUNS]
+    assert etapa.n_descartados == 1
+    assert etapa.motivo == "menos de 50 runs de push no default branch com sucesso/falha na janela"
+    assert_cadeia_consistente(resultado)
+
+
+@pytest.mark.parametrize("teto", [45, 49, 50, 2500, None])
+def test_contagem_perto_do_limiar_acima_ou_desconhecida_coleta_completo(teto):
+    """A coleta completa e a contagem local (critério antigo) decidem; a contagem só poupa."""
+    fontes = Fontes({"a/x": Perfil(teto=teto, runs=[run()] * 49)})
+    resultado = rodar_com_prefiltro([repo("a/x")], fontes)
+
+    assert fontes.runs == ["a/x"]
+    assert resultado.amostra == []  # 49 runs locais: descartado como antes
+
+
+def test_prefiltro_so_e_consultado_para_quem_passou_em_releases():
+    fontes = Fontes({"a/sem": Perfil(actions=False), "a/poucas": Perfil(releases=[release()] * 4)})
+    rodar_com_prefiltro([repo("a/sem"), repo("a/poucas"), repo("a/ok")], fontes)
+    assert fontes.tetos == ["a/ok"]
+
+
+def test_erro_definitivo_no_prefiltro_descarta_como_inacessivel():
+    class FontesTetoComErro(Fontes):
+        def teto_runs(self, r):
+            raise ErroHTTP(Response({"message": "Not Found"}, status_code=404), "GET runs")
+
+    resultado = rodar_com_prefiltro([repo("a/x")], FontesTetoComErro())
+    assert por_etapa(resultado)[ETAPA_ACESSIVEL].n_descartados == 1
+    assert resultado.amostra == []
+
+
+def test_prefiltro_nao_muda_a_amostra_nem_o_funil():
+    """Com contagens fiéis (ou acima, nunca abaixo da contagem local), o funil fica idêntico."""
+    candidatos = [repo(f"org/r{k:02d}") for k in range(60)]
+    perfis = {}
+    for k in range(60):
+        n_runs = (k * 7) % 90  # de 0 a 89 runs válidos
+        perfis[f"org/r{k:02d}"] = Perfil(
+            actions=k % 5 != 0,
+            releases=[release()] * (3 + k % 4),
+            runs=[run()] * n_runs + [run(conclusion="cancelled")] * 3,
+            teto=EXATO if k % 3 else n_runs + 2,  # às vezes acima do real (meses no teto)
+        )
+    for cfg in (config(tamanho_amostra=5), config(tamanho_amostra=50)):
+        sem = rodar(candidatos, Fontes(perfis), cfg)
+        fontes = Fontes(perfis)
+        com = rodar_com_prefiltro(candidatos, fontes, cfg)
+        assert nomes(com.amostra) == nomes(sem.amostra)
+        assert com.etapas == sem.etapas
+        assert com.n_avaliados == sem.n_avaliados
+    assert len(fontes.runs) < len(fontes.tetos)  # houve economia de coleta completa

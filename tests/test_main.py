@@ -91,11 +91,18 @@ def _run(i: int) -> dict:
 
 @pytest.fixture
 def coleta_falsa(monkeypatch):
-    """Três candidatos: `o/sem-actions` cai na etapa 3; `o/a` e `o/b` são elegíveis."""
-    chamadas = {"runs": [], "tags": [], "commits": []}
+    """Quatro candidatos: `o/sem-actions` cai na etapa 3 e `o/poucos-runs` no pré-filtro
+    da etapa 5 (contagem da API); `o/a` e `o/b` são elegíveis."""
+    chamadas = {"runs": [], "tags": [], "commits": [], "contagens": []}
     monkeypatch.setattr(selecao, "buscar_candidatos", lambda cliente, faixas: [
-        _repo("o/a"), _repo("o/b"), _repo("o/sem-actions"),
+        _repo("o/a"), _repo("o/b"), _repo("o/sem-actions"), _repo("o/poucos-runs"),
     ])
+
+    def contagem(cliente, nome, branch, janela, parar_em=None):
+        chamadas["contagens"].append((nome, parar_em))
+        return 3 if nome == "o/poucos-runs" else 50
+
+    monkeypatch.setattr(workflow_runs, "contar_runs_validos_api", contagem)
     monkeypatch.setattr(funil, "usa_github_actions", lambda cliente, nome: nome != "o/sem-actions")
     monkeypatch.setattr(funil, "coletar_releases", lambda cliente, nome: [
         {"tag_name": f"v{i}", "published_at": DENTRO + timedelta(days=i), "draft": False, "prerelease": False}
@@ -135,9 +142,12 @@ def test_executar_grava_todos_os_artefatos_da_amostra(escrever_config, coleta_fa
     executar(object(), config)
 
     saida, processados = config.dir_saida, config.dir_processados
-    assert len(_linhas(saida / "candidatos.csv")) == 3
+    assert len(_linhas(saida / "candidatos.csv")) == 4
     funil_csv = _linhas(saida / "funil.csv")
     assert funil_csv[-1]["n_restantes"] == "2"
+    assert funil_csv[-2]["n_descartados"] == "1"  # o/poucos-runs, na etapa de runs
+    assert "o/poucos-runs" not in coleta_falsa["runs"]  # pré-filtro: sem coleta completa
+    assert {limiar for _, limiar in coleta_falsa["contagens"]} == {config.min_runs}
     repos = _linhas(saida / "repos.csv")
     assert sorted(r["full_name"] for r in repos) == ["o/a", "o/b"]
     assert {r["contributors"] for r in repos} == {"7"}

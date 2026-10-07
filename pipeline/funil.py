@@ -10,6 +10,15 @@ Etapas, da mais barata para a mais cara em cota de API (DIRETRIZES 6.3):
 5. ≥ `min_runs` runs válidos na janela — coleta de workflow runs (#9, C), a mais cara;
 6. amostra: candidatos em ordem aleatória (semente do config) até reunir `tamanho_amostra`.
 
+**Pré-filtro da etapa 5** (`teto_runs`, opcional): antes de baixar todos os runs, conta os
+válidos pelo `total_count` da API (`workflow_runs.contar_runs_validos_api`, ~4 chamadas). A
+contagem usa os mesmos filtros do critério (UTC, default branch, push, conclusões válidas)
+e é um limite superior da contagem local; mesmo assim, por segurança, só descarta quem fica
+abaixo de `limiar_prefiltro_runs(min_runs)` (folga de 10 %). Perto do limiar, acima dele ou
+com contagem desconhecida (None), a coleta completa e `contar_runs_validos` decidem, como
+antes. Assim a decisão é a mesma do critério antigo e a coleta completa só acontece para
+quem é (quase certamente) elegível, isto é, para a amostra.
+
 Um repositório cuja consulta nas etapas 3–5 recebe erro HTTP definitivo (404 apagado/renomeado,
 451 bloqueado, 403 que não é cota…) sai na linha `ETAPA_ACESSIVEL` com o status no motivo, em
 vez de interromper a coleta; erros transitórios ou de credencial (5xx, 401) continuam subindo.
@@ -47,6 +56,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import math
 import random
 from collections import Counter
 from collections.abc import Callable, Iterable
@@ -76,9 +86,14 @@ ETAPA_AMOSTRA = "amostra final"
 MOTIVO_FORK = "fork"
 MOTIVO_ARQUIVADO = "arquivado"
 
+# Pré-filtro de runs: só descarta sem coleta completa quem a contagem da API põe abaixo de
+# min_runs × (1 − folga). Perto do limiar, a coleta completa decide (ver docstring do módulo).
+FOLGA_PREFILTRO_RUNS = 0.10
+
 UsaActions = Callable[[dict], bool]          # Repo → usa GitHub Actions?
 ColetorReleases = Callable[[dict], list[dict]]  # Repo → list[Release] (contrato 5.2)
 ColetorRuns = Callable[[dict], list[dict]]      # Repo → list[Run] (contrato 5.2)
+TetoRuns = Callable[[dict], int | None]         # Repo → limite superior de runs válidos (None = ?)
 
 
 @dataclass(frozen=True)
@@ -123,6 +138,11 @@ def contar_runs_validos(runs: Iterable[dict], default_branch: str, janela: Janel
     return sum(1 for r in runs if run_valido(r, default_branch, janela.inicio, janela.fim))
 
 
+def limiar_prefiltro_runs(min_runs: int) -> int:
+    """Contagem da API abaixo da qual o repositório sai sem coleta completa dos runs."""
+    return math.ceil(min_runs * (1 - FOLGA_PREFILTRO_RUNS))
+
+
 def ordem_aleatoria(repos: Iterable[dict], semente: int) -> list[dict]:
     """Nova lista embaralhada com `random.Random(semente)`.
 
@@ -143,11 +163,14 @@ def executar_funil(
     releases_de: ColetorReleases,
     runs_de: ColetorRuns,
     avaliar_todos: bool = False,
+    teto_runs: TetoRuns | None = None,
 ) -> ResultadoFunil:
     """Aplica as etapas 1–6 e devolve a amostra e as linhas do funil.
 
     Por padrão para de avaliar ao reunir `config.tamanho_amostra` elegíveis (ver docstring
     do módulo). Com menos elegíveis que o tamanho pedido, avisa e devolve os que existem.
+    `teto_runs` liga o pré-filtro da etapa 5 (sem ele, todo candidato que passa em releases
+    tem os runs coletados por completo).
     """
     candidatos = list(candidatos)
     janela = config.janela
@@ -170,7 +193,7 @@ def executar_funil(
             break
         avaliados += 1
         try:
-            motivo = _motivo_descarte(repo, config, usa_actions, releases_de, runs_de)
+            motivo = _motivo_descarte(repo, config, usa_actions, releases_de, runs_de, teto_runs)
         except Exception as erro:
             status = getattr(erro, "status_code", None)
             if status not in STATUS_ERRO_CACHEAVEL:
@@ -201,7 +224,7 @@ def executar_funil(
 
 def _motivo_descarte(
     repo: dict, config: Config, usa_actions: UsaActions,
-    releases_de: ColetorReleases, runs_de: ColetorRuns,
+    releases_de: ColetorReleases, runs_de: ColetorRuns, teto_runs: TetoRuns | None = None,
 ) -> str | None:
     """Etapas 3–5 com curto-circuito: a primeira em que o repo cai, ou None se é elegível."""
     nome = repo["full_name"]
@@ -212,6 +235,11 @@ def _motivo_descarte(
     if n_releases < config.min_releases:
         log.debug("%s: %d releases na janela", nome, n_releases)
         return "releases"
+    if teto_runs is not None:
+        teto = teto_runs(repo)
+        if teto is not None and teto < limiar_prefiltro_runs(config.min_runs):
+            log.debug("%s: pré-filtro: no máximo %d runs válidos na janela", nome, teto)
+            return "runs"
     n_runs = contar_runs_validos(runs_de(repo), repo["default_branch"], config.janela)
     if n_runs < config.min_runs:
         log.debug("%s: %d runs válidos na janela", nome, n_runs)

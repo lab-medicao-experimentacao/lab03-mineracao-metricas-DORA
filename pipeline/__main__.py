@@ -72,11 +72,12 @@ def executar(cliente: ClienteGitHub, config: Config, avaliar_todos: bool = False
     selecao.salvar_candidatos(candidatos, config.dir_saida)
 
     releases_de = funil.ReleasesColetadas(cliente)
-    runs_de = workflow_runs.RunsColetados(cliente, config.janela)
+    runs_de = workflow_runs.RunsColetados(cliente, config.janela, limiar=config.min_runs)
     resultado = funil.executar_funil(
         candidatos, config,
         usa_actions=lambda r: funil.usa_github_actions(cliente, r["full_name"]),
         releases_de=releases_de, runs_de=runs_de, avaliar_todos=avaliar_todos,
+        teto_runs=runs_de.teto,
     )
     funil.salvar_funil(resultado.etapas, config.dir_saida)
 
