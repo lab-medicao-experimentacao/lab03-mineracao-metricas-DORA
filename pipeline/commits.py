@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from pipeline.config import Janela
+from pipeline.paralelo import em_ordem
 from pipeline.selecao import ClienteGitHub
 
 log = logging.getLogger(__name__)
@@ -54,7 +55,8 @@ def _status(erro: Exception) -> int | None:
 
 
 def coletar_commits_entre_releases(
-    cliente: ClienteGitHub, full_name: str, releases: Iterable[dict], janela: Janela
+    cliente: ClienteGitHub, full_name: str, releases: Iterable[dict], janela: Janela,
+    workers: int = 1,
 ) -> ResultadoCommits:
     """Compara cada release principal da janela à release principal anterior.
 
@@ -62,7 +64,8 @@ def coletar_commits_entre_releases(
     possui comparação. Um compare 404 (FAQ do enunciado), 422 ou 5xx que persiste após
     as novas tentativas do cliente é registrado e a release fica fora do lead time;
     outros erros (ex.: 401) sobem. 5xx não fica no cache: é tentado de novo na próxima
-    execução. O cliente pagina o campo ``commits`` da resposta do compare.
+    execução. O cliente pagina o campo ``commits`` da resposta do compare. Com
+    `workers > 1`, os compares são pedidos em paralelo; o resultado (e a ordem) é o mesmo.
     """
     historico = sorted(
         (
@@ -77,28 +80,32 @@ def coletar_commits_entre_releases(
     com_404: list[str] = []
     com_erro: list[tuple[str, int]] = []
 
+    pares: list[tuple[str, str]] = []  # (anterior, tag), na ordem de publicação
     for indice, release in enumerate(historico):
         if release["published_at"] < janela.inicio:
             continue
-        tag = release["tag_name"]
         if indice == 0:
-            sem_anterior.append(tag)
-            continue
-        anterior = historico[indice - 1]["tag_name"]
+            sem_anterior.append(release["tag_name"])
+        else:
+            pares.append((historico[indice - 1]["tag_name"], release["tag_name"]))
+
+    def comparar(par: tuple[str, str]) -> list[dict]:
+        anterior, tag = par
         caminho = (
             f"/repos/{full_name}/compare/"
             f"{quote(anterior, safe='')}...{quote(tag, safe='')}"
         )
-        try:
-            itens = cliente.get_paginated(caminho, {"per_page": 100}, item_key="commits")
-        except Exception as erro:
+        return cliente.get_paginated(caminho, {"per_page": 100}, item_key="commits")
+
+    for (anterior, tag), itens, erro in em_ordem(comparar, pares, workers):
+        if erro is not None:
             status = _status(erro)
             if status == 404:
                 com_404.append(tag)
             elif status in STATUS_COMPARE_IGNORAVEL or (status or 0) >= 500:
                 com_erro.append((tag, status))
             else:
-                raise
+                raise erro
             log.warning("%s: compare %s...%s retornou %s; release fora do lead time",
                         full_name, anterior, tag, status)
             continue

@@ -137,8 +137,9 @@ def coleta_falsa(monkeypatch):
 
     monkeypatch.setattr(releases, "coletar_tags", tags)
 
-    def commits_entre(cliente, nome, rels, janela):
+    def commits_entre(cliente, nome, rels, janela, workers=1):
         chamadas["commits"].append((nome, len(rels)))
+        chamadas.setdefault("workers_commits", set()).add(workers)
         commit = {"sha": "abc", "author_date": DENTRO, "message": "m"}
         return ResultadoCommits({"v1": [commit]}, ("v0",), ())
 
@@ -178,6 +179,9 @@ def test_executar_grava_todos_os_artefatos_da_amostra(escrever_config, coleta_fa
     ]
     assert sorted(coleta_falsa["tags"]) == ["o/a", "o/b"]
     assert sorted(coleta_falsa["commits"]) == [("o/a", 5), ("o/b", 5)]
+    # repositórios em sequência, compares de cada um em paralelo (4 em voo, sem cauda longa)
+    assert coleta_falsa["commits"] == [(r["full_name"], 5) for r in repos]  # ordem da amostra
+    assert coleta_falsa["workers_commits"] == {config.workers}
     assert "o/sem-actions" not in coleta_falsa["runs"]
     assert "teto de 1.000 runs: o/b" in caplog.text
 
@@ -194,9 +198,9 @@ def test_executar_com_4_workers_grava_os_mesmos_arquivos_que_com_1(
                          (metadados, "coletar_contribuidores")):
         original = getattr(modulo, nome)
 
-        def com_atraso(*args, _original=original):
+        def com_atraso(*args, _original=original, **kwargs):
             time.sleep(random.uniform(0, 0.005))
-            return _original(*args)
+            return _original(*args, **kwargs)
 
         monkeypatch.setattr(modulo, nome, com_atraso)
     candidatos = [_repo(f"o/r{k:02d}") for k in range(30)]
@@ -217,7 +221,6 @@ def test_executar_com_4_workers_grava_os_mesmos_arquivos_que_com_1(
 @pytest.mark.parametrize("modulo, nome", [
     (metadados, "coletar_contribuidores"),
     (releases, "coletar_tags"),
-    (commits, "coletar_commits_entre_releases"),
     (workflow_runs, "coletar_runs"),
 ])
 def test_executar_coleta_a_amostra_em_paralelo(escrever_config, coleta_falsa, monkeypatch, modulo, nome):

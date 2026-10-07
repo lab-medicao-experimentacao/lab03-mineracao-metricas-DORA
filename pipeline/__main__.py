@@ -100,11 +100,13 @@ def executar(cliente: ClienteGitHub, config: Config, avaliar_todos: bool = False
     tags = mapear(lambda nome: releases.coletar_tags(cliente, nome), nomes, workers)
     releases.salvar_tags(dict(zip(nomes, tags)), config.dir_processados)
 
-    resultados_commits = dict(zip(nomes, mapear(
-        lambda nome: commits.coletar_commits_entre_releases(
-            cliente, nome, releases_por_repo[nome], config.janela),
-        nomes, workers,
-    )))
+    # um repositório por vez, com os compares dele em paralelo: um repositório com
+    # centenas de releases não vira uma cauda longa sequencial
+    resultados_commits = {
+        nome: commits.coletar_commits_entre_releases(
+            cliente, nome, releases_por_repo[nome], config.janela, workers=workers)
+        for nome in nomes
+    }
     commits.salvar_commits(
         {nome: r.commits_por_release for nome, r in resultados_commits.items()},
         config.dir_processados,
