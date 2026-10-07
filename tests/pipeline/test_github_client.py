@@ -3,6 +3,9 @@
 import gzip
 import json
 import logging
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 import requests
@@ -10,6 +13,7 @@ from requests.structures import CaseInsensitiveDict
 
 from pipeline.github_client import (
     URL_BASE,
+    ColetaCancelada,
     ErroGraphQL,
     ErroHTTP,
     GitHubClient,
@@ -73,6 +77,7 @@ class Relogio:
 def cliente(tmp_path, *respostas, relogio=None, **extra):
     relogio = relogio or Relogio()
     sessao = SessaoFalsa(*respostas)
+    extra.setdefault("intervalo_minimo", 0.0)  # ritmo global testado à parte
     c = GitHubClient(TOKEN, tmp_path / "cache", sessao=sessao,
                      dormir=relogio.dormir, agora=relogio, **extra)
     return c, sessao, relogio
@@ -567,3 +572,186 @@ def test_graphql_5xx_usa_backoff(tmp_path):
     c, _, relogio = cliente(tmp_path, RespostaFalsa(502, {"message": "Bad Gateway"}), ok({"data": {"v": 1}}))
     assert c.graphql(CONSULTA) == {"v": 1}
     assert relogio.esperas == [1.0]
+
+
+# --- concorrência (várias threads no mesmo cliente) --------------------------------------
+
+
+class RelogioSeguro(Relogio):
+    """Relógio falso compartilhado entre threads."""
+
+    def __init__(self, inicio=1_000.0):
+        super().__init__(inicio)
+        self._trava = threading.Lock()
+
+    def dormir(self, segundos):
+        with self._trava:
+            super().dormir(segundos)
+
+    def __call__(self):
+        with self._trava:
+            return self.agora
+
+
+class SessaoPorUrl:
+    """Sessão segura para threads: responde pelo caminho e anota (caminho, instante)."""
+
+    def __init__(self, relogio, respostas_iniciais=(), atraso=0.0):
+        self.headers = {}
+        self.relogio = relogio
+        self.iniciais = list(respostas_iniciais)
+        self.atraso = atraso
+        self.chamadas = []
+        self._trava = threading.Lock()
+
+    def get(self, url, params=None, timeout=None):
+        with self._trava:
+            self.chamadas.append((url.removeprefix(URL_BASE), self.relogio()))
+            inicial = self.iniciais.pop(0) if self.iniciais else None
+        time.sleep(self.atraso)
+        return inicial or ok({"url": url})
+
+
+def em_threads(funcao, argumentos, n_threads=8):
+    with ThreadPoolExecutor(n_threads) as executor:
+        return list(executor.map(funcao, argumentos))
+
+
+def cliente_concorrente(tmp_path, relogio=None, iniciais=(), atraso=0.0, **extra):
+    relogio = relogio or RelogioSeguro()
+    sessao = SessaoPorUrl(relogio, iniciais, atraso)
+    extra.setdefault("intervalo_minimo", 0.0)
+    c = GitHubClient(TOKEN, tmp_path / "cache", sessao=sessao, dormir=relogio.dormir,
+                     agora=relogio, **extra)
+    return c, sessao, relogio
+
+
+def test_threads_em_chaves_diferentes_contam_e_guardam_tudo(tmp_path):
+    c, sessao, _ = cliente_concorrente(tmp_path, atraso=0.001)
+    caminhos = [f"/repos/o/r{i}" for i in range(60)]
+
+    respostas = em_threads(lambda p: c.get(p).json["url"], caminhos)
+
+    assert respostas == [URL_BASE + p for p in caminhos]  # cada thread recebe a sua
+    assert c.requisicoes_rede == 60 and len(sessao.chamadas) == 60
+    assert len(arquivos_cache(tmp_path)) == 60
+    assert not list((tmp_path / "cache").rglob("*.tmp"))
+
+
+def test_mesma_requisicao_em_varias_threads_vai_a_rede_uma_vez(tmp_path):
+    c, sessao, _ = cliente_concorrente(tmp_path, atraso=0.02)
+
+    respostas = em_threads(lambda _: c.get("/repos/o/r", {"per_page": 1}).json, range(8))
+
+    assert len(sessao.chamadas) == 1
+    assert all(r == respostas[0] for r in respostas)
+    assert (c.requisicoes_rede, c.acertos_cache) == (1, 7)
+
+
+def test_cota_esgotada_faz_todas_as_threads_esperarem_a_renovacao(tmp_path):
+    zerada = ok({}, **{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1060",
+                       "X-RateLimit-Resource": "core"})
+    c, sessao, _ = cliente_concorrente(tmp_path, iniciais=[zerada])
+    c.get("/primeira")
+
+    em_threads(lambda i: c.get(f"/x{i}"), range(6))
+
+    depois = [instante for caminho, instante in sessao.chamadas if caminho != "/primeira"]
+    assert len(depois) == 6
+    assert min(depois) >= 1060  # ninguém passou antes da renovação
+
+
+def test_ultima_requisicao_da_cota_e_reservada_para_uma_thread_so(tmp_path):
+    uma_restante = ok({}, **{"X-RateLimit-Remaining": "1", "X-RateLimit-Reset": "1060",
+                             "X-RateLimit-Resource": "core"})
+    c, sessao, _ = cliente_concorrente(tmp_path, iniciais=[uma_restante])
+    c.get("/primeira")
+
+    em_threads(lambda i: c.get(f"/x{i}"), range(6))
+
+    antes_da_renovacao = [i for caminho, i in sessao.chamadas if caminho != "/primeira" and i < 1060]
+    assert len(antes_da_renovacao) == 1
+
+
+def test_resposta_atrasada_nao_aumenta_a_cota_restante(tmp_path):
+    """Com threads, a resposta com Remaining maior pode chegar depois: vale o menor."""
+    r1 = ok({}, **{"X-RateLimit-Remaining": "1", "X-RateLimit-Reset": "1060"})
+    atrasada = ok({}, **{"X-RateLimit-Remaining": "5", "X-RateLimit-Reset": "1060"})
+    c, _, relogio = cliente(tmp_path, r1, atrasada, ok({}), relogio=Relogio(1_000.0))
+    c.get("/a")
+    c.get("/b")  # usa a última da cota (reservada); a resposta "5" é de antes
+    c.get("/c")
+    assert relogio.esperas == [61.0]
+
+
+def test_limite_secundario_pausa_tambem_as_outras_threads(tmp_path):
+    relogio = RelogioSeguro()
+    b_esperou = threading.Event()
+    esperas = []
+    limite = RespostaFalsa(429, {"message": "secondary rate limit"}, {"Retry-After": "30"})
+
+    def dormir(segundos):
+        nome = threading.current_thread().name
+        esperas.append((nome, segundos))
+        if nome == "A":
+            thread_b.start()
+            assert b_esperou.wait(5)
+        else:
+            b_esperou.set()
+        relogio.dormir(segundos)
+
+    sessao = SessaoPorUrl(relogio, [limite])
+    c = GitHubClient(TOKEN, tmp_path / "cache", sessao=sessao, dormir=dormir, agora=relogio,
+                     intervalo_minimo=0.0)
+    thread_b = threading.Thread(target=lambda: c.get("/b"), name="B")
+    thread_a = threading.Thread(target=lambda: c.get("/a"), name="A")
+    thread_a.start()
+    thread_a.join(5)
+    thread_b.join(5)
+
+    assert ("A", 31.0) in esperas
+    assert ("B", 31.0) in esperas  # B começou durante a pausa e esperou junto
+    assert [caminho for caminho, _ in sessao.chamadas].count("/b") == 1
+
+
+def test_intervalo_minimo_entre_requisicoes(tmp_path):
+    c, _, relogio = cliente(tmp_path, ok({}), ok({}), ok({}), intervalo_minimo=0.5)
+    c.get("/a")
+    c.get("/b")
+    c.get("/b")  # do cache: não espera
+    assert relogio.esperas == [0.5]
+
+
+def test_cancelar_interrompe_a_espera_e_impede_novas_requisicoes(tmp_path):
+    zerada = ok({}, **{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(10**10)})
+    sessao = SessaoFalsa(zerada)
+    c = GitHubClient(TOKEN, tmp_path / "cache", sessao=sessao)  # dormir real, interrompível
+    c.get("/a")
+
+    erros = []
+
+    def esperar_a_cota():
+        try:
+            c.get("/b")
+        except ColetaCancelada as erro:
+            erros.append(erro)
+
+    thread = threading.Thread(target=esperar_a_cota)
+    thread.start()
+    time.sleep(0.1)
+    c.cancelar()
+    thread.join(5)
+
+    assert not thread.is_alive() and len(erros) == 1
+    with pytest.raises(ColetaCancelada):
+        c.get("/c")
+    assert len(sessao.chamadas) == 1
+
+
+def test_sem_sessao_injetada_cada_thread_tem_a_sua(tmp_path):
+    c = GitHubClient(TOKEN, tmp_path / "cache")
+    principal = c._sessao_atual()
+    assert c._sessao_atual() is principal
+    outra = em_threads(lambda _: c._sessao_atual(), [0], n_threads=1)[0]
+    assert outra is not principal
+    assert outra.headers["Authorization"] == principal.headers["Authorization"] == f"Bearer {TOKEN}"

@@ -15,6 +15,14 @@ Contrato 5.1 das DIRETRIZES: `get` devolve um `Response` (`.json`, `.headers`) e
   por item (datas das tags).
 - O token só vai no cabeçalho `Authorization` de requisições a `api.github.com`;
   nunca é registrado em log nem gravado no cache.
+- Seguro para threads (paralelismo leve do pipeline, #10): uma trava por arquivo de cache
+  (a mesma requisição em duas threads vai à rede uma vez e ninguém lê um arquivo sendo
+  trocado); a cota é compartilhada e *reservada* antes de cada chamada (com 1 restante, só
+  uma thread passa; esgotada, todas esperam a renovação); respostas fora de ordem não
+  aumentam a cota (vale o menor `Remaining` da mesma janela); um 403/429 de limite pausa o
+  recurso para todas as threads; um ritmo global (`intervalo_minimo`, 0,1 s ≈ 600 req/min,
+  abaixo dos 900 pontos/min do limite secundário) espaça as partidas; cada thread usa a
+  própria `requests.Session`. `cancelar()` (Ctrl+C) acorda quem espera e barra novas chamadas.
 """
 
 from __future__ import annotations
@@ -27,6 +35,7 @@ import math
 import os
 import re
 import tempfile
+import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -53,6 +62,9 @@ TERMOS_LIMITE_SECUNDARIO = ("rate limit", "abuse detection")
 FOLGA_RENOVACAO_S = 1.0     # segundos extras depois do `X-RateLimit-Reset`
 TIMEOUT_S = 30.0
 INTERVALO_PROGRESSO = 100   # loga a cada N requisições feitas à rede
+# Espaço mínimo entre partidas de requisições à rede, somando todas as threads: 0,1 s
+# limita a ~600 req/min, abaixo dos 900 pontos/min do limite secundário da REST.
+INTERVALO_MINIMO_S = 0.1
 
 # Erros 4xx que se repetem sempre: valem a pena no cache (p. ex. compare 404).
 STATUS_ERRO_CACHEAVEL = frozenset({403, 404, 409, 410, 422, 451})
@@ -95,8 +107,15 @@ class ErroGraphQL(Exception):
         super().__init__(f"GraphQL: {mensagens or 'erro sem mensagem'}")
 
 
+class ColetaCancelada(Exception):
+    """A coleta foi cancelada (`GitHubClient.cancelar`, p. ex. no Ctrl+C): nada de rede nova."""
+
+
 class GitHubClient:
-    """Cliente autenticado com cache em disco, controle de cota e novas tentativas."""
+    """Cliente autenticado com cache em disco, controle de cota e novas tentativas.
+
+    Pode ser usado por várias threads ao mesmo tempo (ver docstring do módulo).
+    """
 
     def __init__(
         self,
@@ -107,33 +126,51 @@ class GitHubClient:
         max_tentativas: int = MAX_TENTATIVAS,
         espera_base: float = ESPERA_BASE_S,
         timeout: float = TIMEOUT_S,
-        dormir: Callable[[float], None] = time.sleep,
+        dormir: Callable[[float], None] | None = None,
         agora: Callable[[], float] = time.time,
+        intervalo_minimo: float = INTERVALO_MINIMO_S,
     ):
         if not token or not token.strip():
             raise ValueError("token do GitHub vazio")
         if max_tentativas < 1:
             raise ValueError("max_tentativas deve ser >= 1")
         self._cache_dir = Path(cache_dir)
-        self._sessao = sessao or requests.Session()
-        self._sessao.headers.update({
+        self._cabecalhos = {
             "Authorization": f"Bearer {token.strip()}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": VERSAO_API,
             "User-Agent": "lab03-mineracao-metricas-dora",
-        })
+        }
+        # sessão injetada (testes) é compartilhada; senão, uma requests.Session por thread
+        self._sessao_fixa = sessao
+        if sessao is not None:
+            sessao.headers.update(self._cabecalhos)
+        self._sessoes = threading.local()
         self._max_tentativas = max_tentativas
         self._espera_base = espera_base
         self._timeout = timeout
-        self._dormir = dormir
+        self._cancelada = threading.Event()
+        self._dormir = dormir or self._dormir_interrompivel
         self._agora = agora
+        self._intervalo_minimo = intervalo_minimo
+        # `_trava` protege cota, pausas, ritmo, contadores e o mapa de travas por arquivo;
+        # nunca é mantida durante rede, disco ou espera.
+        self._trava = threading.Lock()
+        self._travas_arquivo: dict[Path, threading.Lock] = {}
         # recurso ("core", "search"…) → (requisições restantes, epoch da renovação)
         self._cota: dict[str, tuple[int, float]] = {}
+        self._pausa: dict[str, float] = {}  # recurso → epoch até quando ninguém chama
+        self._avisos_cota: dict[str, float] = {}  # renovação já avisada no log, por recurso
+        self._proxima_partida = 0.0
         self.requisicoes_rede = 0
         self.acertos_cache = 0
 
     def __repr__(self) -> str:  # nunca expõe o token
         return f"GitHubClient(cache_dir={str(self._cache_dir)!r})"
+
+    def cancelar(self) -> None:
+        """Acorda as threads em espera e faz toda nova requisição à rede levantar `ColetaCancelada`."""
+        self._cancelada.set()
 
     # --- contrato 5.1 -------------------------------------------------------------
 
@@ -146,15 +183,16 @@ class GitHubClient:
         parametros = _normalizar_parametros(params)
         arquivo = self._arquivo_cache(path, parametros)
 
-        guardada = self._ler_cache(arquivo)
-        if guardada is not None:
-            self.acertos_cache += 1
-            log.debug("cache: GET %s", path)
-            return self._entregar(guardada, path)
+        with self._trava_do_arquivo(arquivo):
+            guardada = self._ler_cache(arquivo)
+            if guardada is not None:
+                self._contar_acerto_cache()
+                log.debug("cache: GET %s", path)
+                return self._entregar(guardada, path)
 
-        resposta = self._buscar_na_rede(path, parametros)
-        if resposta.status_code < 400 or resposta.status_code in STATUS_ERRO_CACHEAVEL:
-            self._gravar_cache(arquivo, path, parametros, resposta)
+            resposta = self._buscar_na_rede(path, parametros)
+            if resposta.status_code < 400 or resposta.status_code in STATUS_ERRO_CACHEAVEL:
+                self._gravar_cache(arquivo, path, parametros, resposta)
         return self._entregar(resposta, path)
 
     def get_paginated(
@@ -193,13 +231,14 @@ class GitHubClient:
         arquivo = self._arquivo_da_chave(
             f"POST {CAMINHO_GRAPHQL} " + json.dumps(corpo, sort_keys=True, ensure_ascii=False)
         )
-        resposta = self._ler_cache(arquivo)
-        if resposta is not None:
-            self.acertos_cache += 1
-        else:
-            resposta = self._buscar_na_rede(CAMINHO_GRAPHQL, {}, corpo)
-            if resposta.status_code < 400 and not _erros_graphql(resposta.json):
-                self._gravar_cache(arquivo, CAMINHO_GRAPHQL, corpo["variables"], resposta)
+        with self._trava_do_arquivo(arquivo):
+            resposta = self._ler_cache(arquivo)
+            if resposta is not None:
+                self._contar_acerto_cache()
+            else:
+                resposta = self._buscar_na_rede(CAMINHO_GRAPHQL, {}, corpo)
+                if resposta.status_code < 400 and not _erros_graphql(resposta.json):
+                    self._gravar_cache(arquivo, CAMINHO_GRAPHQL, corpo["variables"], resposta)
         if resposta.status_code >= 400:
             raise ErroHTTP(resposta, f"POST {CAMINHO_GRAPHQL}")
         erros = _erros_graphql(resposta.json)
@@ -214,18 +253,19 @@ class GitHubClient:
     ) -> Response:
         """GET (ou POST com `corpo` JSON, para o GraphQL) com cota, limite e backoff."""
         rotulo = f"{'GET' if corpo is None else 'POST'} {path}"
+        recurso_presumido = _recurso_presumido(path)
         falhas = esperas_cota = 0
         while True:
-            self._aguardar_cota(_recurso_presumido(path))
-            self.requisicoes_rede += 1
-            if self.requisicoes_rede % INTERVALO_PROGRESSO == 0:
+            numero = self._aguardar_vez(recurso_presumido)
+            if numero % INTERVALO_PROGRESSO == 0:
                 log.info("%d requisições à API (%d respostas vindas do cache)",
-                         self.requisicoes_rede, self.acertos_cache)
+                         numero, self.acertos_cache)
+            sessao = self._sessao_atual()
             try:
                 if corpo is None:
-                    bruta = self._sessao.get(URL_BASE + path, params=parametros, timeout=self._timeout)
+                    bruta = sessao.get(URL_BASE + path, params=parametros, timeout=self._timeout)
                 else:
-                    bruta = self._sessao.post(URL_BASE + path, json=corpo, timeout=self._timeout)
+                    bruta = sessao.post(URL_BASE + path, json=corpo, timeout=self._timeout)
             except requests.RequestException as erro:
                 falhas += 1
                 if falhas >= self._max_tentativas:
@@ -258,12 +298,42 @@ class GitHubClient:
                         # sem prazo informado: 60 s, 120 s, 240 s… (boas práticas da API)
                         espera = ESPERA_LIMITE_SECUNDARIO_S * 2 ** (esperas_cota - 1)
                     log.warning("limite de cota atingido em %s: aguardando %.0f s", rotulo, espera)
-                    # a espera já cobre a renovação: evita dormir de novo em _aguardar_cota
-                    recurso = _cabecalho(bruta.headers, "X-RateLimit-Resource") or _recurso_presumido(path)
-                    self._cota.pop(recurso, None)
-                    self._dormir(espera)
+                    # pausa o recurso para TODAS as threads; a pausa já cobre a renovação,
+                    # então a cota anotada sai (evita esperar duas vezes em _aguardar_vez)
+                    recurso = _cabecalho(bruta.headers, "X-RateLimit-Resource") or recurso_presumido
+                    with self._trava:
+                        self._cota.pop(recurso, None)
+                        self._cota.pop(recurso_presumido, None)
+                        fim_pausa = self._agora() + espera
+                        self._pausa[recurso_presumido] = max(
+                            self._pausa.get(recurso_presumido, 0.0), fim_pausa
+                        )
                     continue
             return resposta
+
+    def _sessao_atual(self) -> requests.Session:
+        """A sessão injetada, ou uma `requests.Session` própria desta thread."""
+        if self._sessao_fixa is not None:
+            return self._sessao_fixa
+        sessao = getattr(self._sessoes, "sessao", None)
+        if sessao is None:
+            sessao = requests.Session()
+            sessao.headers.update(self._cabecalhos)
+            self._sessoes.sessao = sessao
+        return sessao
+
+    def _dormir_interrompivel(self, segundos: float) -> None:
+        """Espera real que `cancelar()` interrompe (levanta `ColetaCancelada`)."""
+        if self._cancelada.wait(min(max(segundos, 0.0), threading.TIMEOUT_MAX)):
+            raise ColetaCancelada("coleta cancelada durante a espera")
+
+    def _contar_acerto_cache(self) -> None:
+        with self._trava:
+            self.acertos_cache += 1
+
+    def _trava_do_arquivo(self, arquivo: Path) -> threading.Lock:
+        with self._trava:
+            return self._travas_arquivo.setdefault(arquivo, threading.Lock())
 
     def _esperar_backoff(self, falhas: int, rotulo: str, motivo: str) -> None:
         espera = self._espera_base * 2 ** (falhas - 1)
@@ -274,23 +344,58 @@ class GitHubClient:
     # --- rate limit ---------------------------------------------------------------
 
     def _registrar_cota(self, headers: Mapping[str, str], path: str) -> None:
+        """Anota a cota informada pela resposta.
+
+        Na mesma janela (mesmo `Reset`) vale o menor `Remaining`: com threads, uma resposta
+        mais antiga pode chegar depois e não pode devolver cota já reservada. Janela nova
+        substitui; resposta de janela anterior é ignorada.
+        """
         restantes = _inteiro(_cabecalho(headers, "X-RateLimit-Remaining"))
         renovacao = _inteiro(_cabecalho(headers, "X-RateLimit-Reset"))
         if restantes is None or renovacao is None:
             return
         recurso = _cabecalho(headers, "X-RateLimit-Resource") or _recurso_presumido(path)
-        self._cota[recurso] = (restantes, float(renovacao))
+        with self._trava:
+            anotada = self._cota.get(recurso)
+            if anotada is None or renovacao > anotada[1]:
+                self._cota[recurso] = (restantes, float(renovacao))
+            elif renovacao == anotada[1]:
+                self._cota[recurso] = (min(restantes, anotada[0]), anotada[1])
 
-    def _aguardar_cota(self, recurso: str) -> None:
-        """Dorme até a renovação se a cota do recurso acabou (sem gastar uma chamada)."""
-        restantes, renovacao = self._cota.get(recurso, (1, 0.0))
-        if restantes > 0:
-            return
-        espera = renovacao - self._agora() + FOLGA_RENOVACAO_S
-        if espera > 0:
-            log.warning("cota '%s' esgotada: aguardando %.0f s pela renovação", recurso, espera)
+    def _aguardar_vez(self, recurso: str) -> int:
+        """Espera pausa, cota e ritmo; reserva uma requisição da cota e devolve o nº dela.
+
+        Cota esgotada: espera a renovação sem gastar chamada (todas as threads esperam).
+        Levanta `ColetaCancelada` depois de `cancelar()`.
+        """
+        while True:
+            with self._trava:
+                if self._cancelada.is_set():
+                    raise ColetaCancelada("coleta cancelada")
+                agora = self._agora()
+                espera = self._pausa.get(recurso, 0.0) - agora
+                if espera <= 0:
+                    self._pausa.pop(recurso, None)
+                    restantes, renovacao = self._cota.get(recurso, (1, 0.0))
+                    if restantes <= 0:
+                        espera = renovacao - agora + FOLGA_RENOVACAO_S
+                        if espera <= 0:  # renovou: a próxima resposta anota a cota nova
+                            del self._cota[recurso]
+                            continue
+                        if self._avisos_cota.get(recurso) != renovacao:
+                            self._avisos_cota[recurso] = renovacao
+                            log.warning("cota '%s' esgotada: aguardando %.0f s pela renovação",
+                                        recurso, espera)
+                if espera <= 0:
+                    espera = self._proxima_partida - agora
+                    if espera <= 0:
+                        if recurso in self._cota:
+                            restantes, renovacao = self._cota[recurso]
+                            self._cota[recurso] = (restantes - 1, renovacao)
+                        self._proxima_partida = agora + self._intervalo_minimo
+                        self.requisicoes_rede += 1
+                        return self.requisicoes_rede
             self._dormir(espera)
-        del self._cota[recurso]
 
     def _espera_por_limite(
         self, resposta: Response, headers: Mapping[str, str], status: int

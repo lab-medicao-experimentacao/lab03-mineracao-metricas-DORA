@@ -265,7 +265,7 @@ def test_cliente_real_nao_baixa_duas_vezes_a_primeira_pagina(tmp_path):
             return requests_falso(corpo, headers)
 
     sessao = Sessao()
-    cliente = GitHubClient("t", tmp_path, sessao=sessao, dormir=lambda s: None)
+    cliente = GitHubClient("t", tmp_path, sessao=sessao, dormir=lambda s: None, intervalo_minimo=0.0)
     resultado = coletar_runs(cliente, "org/repo", "main", JANELA)
     assert len(resultado.runs) == 150
     assert len(sessao.chamadas) == 2
