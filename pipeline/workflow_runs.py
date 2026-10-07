@@ -1,9 +1,10 @@
-"""Coleta de workflow runs do default branch, fatiada por mês (#9).
+"""Coleta de workflow runs do default branch, fatiada por mês quando preciso (#9).
 
 `GET /repos/{o}/{r}/actions/runs` com filtros devolve no máximo 1.000 resultados
-por consulta. A janela é dividida em meses civis (UTC) e cada mês vira uma
-consulta; se algum mês chegar ao teto, há runs que a API não entregou e o mês é
-registrado e avisado (nunca ignorado em silêncio).
+por consulta. Se a janela inteira tem menos de 1.000 runs, uma consulta paginada basta
+(⌈n/100⌉ chamadas em vez de 12 ou mais). Senão, a janela é dividida em meses civis (UTC)
+e cada mês vira uma consulta; se algum mês chegar ao teto, há runs que a API não entregou
+e o mês é registrado e avisado (nunca ignorado em silêncio).
 
 O filtro `event=push` e `branch=<default_branch>` é aplicado pela API. Runs com
 `conclusion` ignorada (cancelled etc.) são coletados e gravados com a classe
@@ -110,26 +111,38 @@ def _data_utc(texto: str) -> datetime:
 
 
 def coletar_runs(
-    cliente: ClienteGitHub, full_name: str, default_branch: str, janela: Janela
+    cliente: ClienteGitHub, full_name: str, default_branch: str, janela: Janela,
+    fatiar_sempre: bool = False,
 ) -> ResultadoRuns:
-    """Runs de push no default branch criados na janela, uma consulta por mês.
+    """Runs de push no default branch criados na janela.
 
-    Um mês que devolve 1.000 runs (o teto da API) é avisado e listado em
-    `meses_saturados`: os runs além do teto não foram entregues pela API.
+    Primeiro a janela inteira numa consulta paginada: se ela tem menos de 1.000 runs
+    (`total_count` e itens entregues abaixo do teto), nenhum mês pode ter batido o teto e
+    basta. Senão (repositórios muito ativos), uma consulta por mês, como pede o enunciado;
+    um mês que devolve 1.000 runs é avisado e listado em `meses_saturados`. Os dois caminhos
+    usam os mesmos filtros (dias UTC inclusivos) e dão os mesmos runs. A 1ª página da janela
+    é pedida com os mesmos parâmetros da listagem, então no cliente com cache ela só vai à
+    rede uma vez. `fatiar_sempre=True` pula a tentativa (coleta antiga, mês a mês).
     """
-    por_id: dict[int, dict] = {}
+    caminho = CAMINHO_RUNS.format(full_name=full_name)
+    if not fatiar_sempre:
+        parametros = _parametros_coleta(default_branch, janela.filtro_created())
+        total = int(corpo_json(cliente.get(caminho, parametros))["total_count"])
+        if total < TETO_RUNS:
+            itens = cliente.get_paginated(caminho, parametros, item_key="workflow_runs")
+            if len(itens) < TETO_RUNS:
+                runs = _ordenar_sem_repetidos(itens)
+                log.info("%s: %d runs coletados numa consulta (janela inteira)", full_name, len(runs))
+                return ResultadoRuns(runs, ())
+            log.info("%s: a janela entregou %d runs (total_count %d); fatiando por mês",
+                     full_name, len(itens), total)
+
+    todos: list[dict] = []
     saturados: list[str] = []
     for fatia in fatias_mensais(janela):
         periodo = filtro_created(fatia)
         itens = cliente.get_paginated(
-            CAMINHO_RUNS.format(full_name=full_name),
-            {
-                "branch": default_branch,
-                "event": EVENTO_RUN_VALIDO,
-                "created": periodo,
-                "per_page": POR_PAGINA,
-            },
-            item_key="workflow_runs",
+            caminho, _parametros_coleta(default_branch, periodo), item_key="workflow_runs"
         )
         if len(itens) >= TETO_RUNS:
             saturados.append(periodo)
@@ -137,11 +150,21 @@ def coletar_runs(
                 "%s: %s retornou %d runs (teto da API): podem faltar runs neste mês",
                 full_name, periodo, len(itens),
             )
-        for item in itens:
-            por_id[int(item["id"])] = converter_run(item)
-    runs = sorted(por_id.values(), key=lambda r: (r["created_at"], r["id"]))
+        todos.extend(itens)
+    runs = _ordenar_sem_repetidos(todos)
     log.info("%s: %d runs coletados em %d meses", full_name, len(runs), len(fatias_mensais(janela)))
     return ResultadoRuns(runs, tuple(saturados))
+
+
+def _parametros_coleta(default_branch: str, periodo: str) -> dict:
+    return {"branch": default_branch, "event": EVENTO_RUN_VALIDO, "created": periodo,
+            "per_page": POR_PAGINA}
+
+
+def _ordenar_sem_repetidos(itens: Iterable[dict]) -> list[dict]:
+    """Converte, remove repetidos por `id` (página deslocada) e ordena por (created_at, id)."""
+    por_id = {int(item["id"]): converter_run(item) for item in itens}
+    return sorted(por_id.values(), key=lambda r: (r["created_at"], r["id"]))
 
 
 def contar_runs_validos_api(
