@@ -9,6 +9,7 @@ import sys
 from pipeline import commits, funil, metadados, releases, selecao, workflow_runs
 from pipeline.config import Config, ErroConfiguracao, carregar_config, carregar_dotenv, ler_token
 from pipeline.github_client import GitHubClient
+from pipeline.paralelo import mapear
 from pipeline.selecao import ClienteGitHub
 
 log = logging.getLogger("pipeline")
@@ -55,6 +56,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 130
     finally:
+        # threads ainda ativas (antecipação do funil, Ctrl+C) acordam e param sem nova chamada
+        cancelar = getattr(cliente, "cancelar", None)
+        if cancelar is not None:
+            cancelar()
         log.info(
             "requisições à rede nesta execução: %d (respostas do cache: %d)",
             getattr(cliente, "requisicoes_rede", 0), getattr(cliente, "acertos_cache", 0),
@@ -66,7 +71,9 @@ def executar(cliente: ClienteGitHub, config: Config, avaliar_todos: bool = False
     """Seleção (#3) → funil (#5) → metadados (#4) → releases/tags (#7) → commits (#8) → runs (#9).
 
     Só a amostra do funil é enriquecida e tem commits, tags e runs gravados. Rodar de novo
-    reaproveita o cache em disco do cliente (#10).
+    reaproveita o cache em disco do cliente (#10). A busca é sequencial (30 req/min); o
+    funil e as coletas da amostra usam `config.workers` threads, com resultados na ordem
+    da amostra (os arquivos não dependem do número de workers).
     """
     candidatos = selecao.buscar_candidatos(cliente, config.faixas_estrelas)
     selecao.salvar_candidatos(candidatos, config.dir_saida)
@@ -81,35 +88,37 @@ def executar(cliente: ClienteGitHub, config: Config, avaliar_todos: bool = False
     )
     funil.salvar_funil(resultado.etapas, config.dir_saida)
 
-    amostra = metadados.enriquecer_metadados(cliente, resultado.amostra, config.janela)
+    workers = config.workers
+    amostra = metadados.enriquecer_metadados(cliente, resultado.amostra, config.janela, workers)
     metadados.salvar_repos(amostra, config.dir_saida)
+    nomes = [r["full_name"] for r in amostra]
 
     releases_por_repo = releases_de.da_amostra(amostra)
     releases.salvar_releases(releases_por_repo, config.dir_processados)
-    releases.salvar_tags(
-        {r["full_name"]: releases.coletar_tags(cliente, r["full_name"]) for r in amostra},
-        config.dir_processados,
-    )
+    tags = mapear(lambda nome: releases.coletar_tags(cliente, nome), nomes, workers)
+    releases.salvar_tags(dict(zip(nomes, tags)), config.dir_processados)
 
-    resultados_commits = {
-        nome: commits.coletar_commits_entre_releases(cliente, nome, rels, config.janela)
-        for nome, rels in releases_por_repo.items()
-    }
+    resultados_commits = dict(zip(nomes, mapear(
+        lambda nome: commits.coletar_commits_entre_releases(
+            cliente, nome, releases_por_repo[nome], config.janela),
+        nomes, workers,
+    )))
     commits.salvar_commits(
         {nome: r.commits_por_release for nome, r in resultados_commits.items()},
         config.dir_processados,
     )
     commits.salvar_releases_sem_compare(resultados_commits, config.dir_processados)
 
-    workflow_runs.salvar_runs(runs_de.da_amostra(amostra), config.dir_processados)
-    workflow_runs.salvar_meses_saturados(
-        {r["full_name"]: runs_de.saturados.get(r["full_name"], ()) for r in amostra},
-        config.dir_processados,
-    )
-    if runs_de.saturados:
+    workflow_runs.salvar_runs(runs_de.da_amostra(amostra, workers), config.dir_processados)
+    # cópia: threads da antecipação do funil ainda podem anotar repositórios fora da amostra
+    saturados = dict(runs_de.saturados)
+    saturados_amostra = {nome: saturados.get(nome, ()) for nome in nomes}
+    workflow_runs.salvar_meses_saturados(saturados_amostra, config.dir_processados)
+    com_teto = sorted(nome for nome, periodos in saturados_amostra.items() if periodos)
+    if com_teto:
         log.warning(
-            "%d repositórios da coleta com meses no teto de 1.000 runs: %s",
-            len(runs_de.saturados), ", ".join(sorted(runs_de.saturados)),
+            "%d repositórios da amostra com meses no teto de 1.000 runs: %s",
+            len(com_teto), ", ".join(com_teto),
         )
 
 

@@ -1,4 +1,7 @@
 import csv
+import random
+import threading
+import time
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
@@ -165,6 +168,90 @@ def test_executar_grava_todos_os_artefatos_da_amostra(escrever_config, coleta_fa
     assert sorted(coleta_falsa["commits"]) == [("o/a", 5), ("o/b", 5)]
     assert "o/sem-actions" not in coleta_falsa["runs"]
     assert "teto de 1.000 runs: o/b" in caplog.text
+
+
+def _arquivos(*pastas) -> dict[str, bytes]:
+    return {p.name: p.read_bytes() for pasta in pastas for p in sorted(pasta.glob("*.csv"))}
+
+
+def test_executar_com_4_workers_grava_os_mesmos_arquivos_que_com_1(
+    escrever_config, coleta_falsa, monkeypatch, tmp_path
+):
+    """Atrasos aleatórios embaralham o término das threads; os CSVs não podem mudar."""
+    for modulo, nome in ((releases, "coletar_tags"), (commits, "coletar_commits_entre_releases"),
+                         (metadados, "coletar_contribuidores")):
+        original = getattr(modulo, nome)
+
+        def com_atraso(*args, _original=original):
+            time.sleep(random.uniform(0, 0.005))
+            return _original(*args)
+
+        monkeypatch.setattr(modulo, nome, com_atraso)
+    candidatos = [_repo(f"o/r{k:02d}") for k in range(30)]
+    monkeypatch.setattr(selecao, "buscar_candidatos", lambda cliente, faixas: candidatos)
+
+    base = carregar_config(escrever_config())
+    saidas = {}
+    for workers in (1, 4):
+        cfg = replace(base, tamanho_amostra=12, workers=workers,
+                      dir_saida=tmp_path / f"saida{workers}", dir_processados=tmp_path / f"proc{workers}")
+        executar(object(), cfg)
+        saidas[workers] = _arquivos(cfg.dir_saida, cfg.dir_processados)
+
+    assert set(saidas[1]) >= {"funil.csv", "repos.csv", "runs.csv", "commits.csv", "tags.csv"}
+    assert saidas[4] == saidas[1]
+
+
+@pytest.mark.parametrize("modulo, nome", [
+    (metadados, "coletar_contribuidores"),
+    (releases, "coletar_tags"),
+    (commits, "coletar_commits_entre_releases"),
+    (workflow_runs, "coletar_runs"),
+])
+def test_executar_coleta_a_amostra_em_paralelo(escrever_config, coleta_falsa, monkeypatch, modulo, nome):
+    """Com 4 workers, cada etapa da amostra roda 4 repositórios ao mesmo tempo."""
+    barreira = threading.Barrier(4, timeout=5)
+    original = getattr(modulo, nome)
+    na_amostra = set()
+
+    def simultanea(*args):
+        if nome != "coletar_runs" or args[1] in na_amostra:  # runs: só a recoleta da amostra
+            barreira.wait()
+        if nome == "coletar_contribuidores":
+            na_amostra.add(args[1])
+        return original(*args)
+
+    monkeypatch.setattr(modulo, nome, simultanea)
+    if nome == "coletar_runs":
+        monkeypatch.setattr(metadados, "coletar_contribuidores",
+                            lambda cliente, n: na_amostra.add(n) or 7)
+    candidatos = [_repo(f"o/r{k:02d}") for k in range(8)]
+    monkeypatch.setattr(selecao, "buscar_candidatos", lambda cliente, faixas: candidatos)
+    cfg = replace(carregar_config(escrever_config()), tamanho_amostra=8, workers=4)
+
+    executar(object(), cfg)
+
+    assert len(_linhas(cfg.dir_saida / "repos.csv")) == 8
+
+
+def test_main_cancela_o_cliente_ao_sair(escrever_config, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "token-de-teste")
+    eventos = []
+
+    class ClienteFalso:
+        def __init__(self, token, cache):
+            pass
+
+        def cancelar(self):
+            eventos.append("cancelar")
+
+    def interrompe(cliente, config, avaliar_todos):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(entrada, "GitHubClient", ClienteFalso)
+    monkeypatch.setattr(entrada, "executar", interrompe)
+    assert main(["--config", str(escrever_config())]) == 130
+    assert eventos == ["cancelar"]  # threads em espera acordam e o processo encerra
 
 
 def test_executar_amostra_limitada_pelo_tamanho(escrever_config, coleta_falsa):

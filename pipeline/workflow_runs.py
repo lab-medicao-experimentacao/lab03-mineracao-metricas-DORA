@@ -31,6 +31,7 @@ from pathlib import Path
 
 from metricas import CONCLUSOES_FALHA, CONCLUSOES_SUCESSO, EVENTO_RUN_VALIDO, classe_conclusao
 from pipeline.config import Janela
+from pipeline.paralelo import mapear
 from pipeline.selecao import ClienteGitHub, corpo_json
 
 log = logging.getLogger(__name__)
@@ -234,9 +235,10 @@ class RunsColetados:
             self.saturados[repo["full_name"]] = resultado.meses_saturados
         return resultado.runs
 
-    def da_amostra(self, amostra: Iterable[dict]) -> dict[str, list[dict]]:
-        """Runs de cada repositório da amostra, na ordem da amostra."""
-        return {r["full_name"]: self(r) for r in amostra}
+    def da_amostra(self, amostra: Iterable[dict], workers: int = 1) -> dict[str, list[dict]]:
+        """Runs de cada repositório da amostra, na ordem da amostra (`workers` simultâneos)."""
+        amostra = list(amostra)
+        return dict(zip((r["full_name"] for r in amostra), mapear(self, amostra, workers)))
 
 
 # --- disco ----------------------------------------------------------------------

@@ -397,6 +397,15 @@ def test_enriquecer_mantem_contribuidores_desconhecidos_e_resume(caplog):
     assert any("1 de 2" in r.getMessage() for r in caplog.records)
 
 
+def test_enriquecer_com_workers_mantem_a_ordem_dos_repositorios():
+    nomes = list(respostas_reais())
+    repos = [repo(n) for n in nomes * 5]
+    sequencial = enriquecer_metadados(cliente_com_fixtures(), repos, JANELA)
+    concorrente = enriquecer_metadados(cliente_com_fixtures(), repos, JANELA, workers=4)
+    assert concorrente == sequencial
+    assert [r["full_name"] for r in concorrente] == nomes * 5
+
+
 def test_enriquecer_loga_progresso(caplog, monkeypatch):
     monkeypatch.setattr("pipeline.metadados.INTERVALO_PROGRESSO", 1)
     with caplog.at_level(logging.INFO, logger="pipeline.metadados"):
