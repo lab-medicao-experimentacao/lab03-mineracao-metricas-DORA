@@ -10,6 +10,12 @@ Etapas, da mais barata para a mais cara em cota de API (DIRETRIZES 6.3):
 5. ≥ `min_runs` runs válidos na janela — coleta de workflow runs (#9, C), a mais cara;
 6. amostra: candidatos em ordem aleatória (semente do config) até reunir `tamanho_amostra`.
 
+Etapa 5 sem atalho por contagem: a soma dos `total_count` por conclusão (`status=`) foi
+testada como pré-filtro e rejeitada, porque a API às vezes devolve contagens bem menores
+que os runs listados (até 75 % a menos), o que descartaria elegíveis. A etapa conta
+localmente os runs listados (critério antigo); o custo baixo para quem é descartado vem de
+`coletar_runs`, que lista a janela inteira numa consulta quando ela tem menos de 1.000 runs.
+
 Um repositório cuja consulta nas etapas 3–5 recebe erro HTTP definitivo (404 apagado/renomeado,
 451 bloqueado, 403 que não é cota…) sai na linha `ETAPA_ACESSIVEL` com o status no motivo, em
 vez de interromper a coleta; erros transitórios ou de credencial (5xx, 401) continuam subindo.
@@ -50,6 +56,7 @@ import logging
 import random
 from collections import Counter
 from collections.abc import Callable, Iterable
+from contextlib import closing
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -57,6 +64,7 @@ from metricas import run_valido
 from metricas.frequencia import releases_publicadas
 from pipeline.config import Config, Janela
 from pipeline.github_client import STATUS_ERRO_CACHEAVEL
+from pipeline.paralelo import em_ordem
 from pipeline.releases import coletar_releases
 from pipeline.selecao import ClienteGitHub, corpo_json
 
@@ -75,6 +83,10 @@ ETAPA_AMOSTRA = "amostra final"
 
 MOTIVO_FORK = "fork"
 MOTIVO_ARQUIVADO = "arquivado"
+
+# Com coleta.workers > 1: quantos candidatos por worker podem começar além do último
+# consumido (mantém as threads ocupadas sem avaliar muito além da parada).
+ANTECIPACAO_POR_WORKER = 2
 
 UsaActions = Callable[[dict], bool]          # Repo → usa GitHub Actions?
 ColetorReleases = Callable[[dict], list[dict]]  # Repo → list[Release] (contrato 5.2)
@@ -161,28 +173,36 @@ def executar_funil(
         else:
             excluidos[motivo] += 1
 
+    def avaliar(repo: dict) -> str | None:
+        return _motivo_descarte(repo, config, usa_actions, releases_de, runs_de)
+
     elegiveis: list[dict] = []
     contagem: Counter[str] = Counter()  # motivo de descarte nas etapas 3–5
     inacessiveis: Counter[int] = Counter()  # status HTTP definitivo → nº de repositórios
     avaliados = 0
-    for repo in ordem_aleatoria(cadastrais, config.semente):
-        if not avaliar_todos and len(elegiveis) >= config.tamanho_amostra:
-            break
-        avaliados += 1
-        try:
-            motivo = _motivo_descarte(repo, config, usa_actions, releases_de, runs_de)
-        except Exception as erro:
-            status = getattr(erro, "status_code", None)
-            if status not in STATUS_ERRO_CACHEAVEL:
-                raise
-            inacessiveis[status] += 1
-            log.warning("%s: descartado, a API respondeu erro definitivo (%s)", repo["full_name"], erro)
-            continue
-        if motivo is not None:
-            contagem[motivo] += 1
-            continue
-        elegiveis.append(repo)
-        log.info("%s elegível (%d/%d)", repo["full_name"], len(elegiveis), config.tamanho_amostra)
+    # Com coleta.workers > 1, os próximos da ordem já são avaliados em paralelo, mas os
+    # resultados são consumidos na ordem sorteada e a parada é a mesma do laço sequencial:
+    # amostra e funil.csv não mudam. O que começou além da parada só aquece o cache.
+    avaliacoes = em_ordem(avaliar, ordem_aleatoria(cadastrais, config.semente), config.workers,
+                          antecipacao=ANTECIPACAO_POR_WORKER * config.workers)
+    with closing(avaliacoes):
+        for repo, motivo, erro in avaliacoes:
+            avaliados += 1
+            if erro is not None:
+                status = getattr(erro, "status_code", None)
+                if status not in STATUS_ERRO_CACHEAVEL:
+                    raise erro
+                inacessiveis[status] += 1
+                log.warning("%s: descartado, a API respondeu erro definitivo (%s)",
+                            repo["full_name"], erro)
+            elif motivo is not None:
+                contagem[motivo] += 1
+            else:
+                elegiveis.append(repo)
+                log.info("%s elegível (%d/%d)", repo["full_name"], len(elegiveis),
+                         config.tamanho_amostra)
+            if not avaliar_todos and len(elegiveis) >= config.tamanho_amostra:
+                break
 
     amostra = elegiveis[: config.tamanho_amostra]
     etapas = _montar_etapas(

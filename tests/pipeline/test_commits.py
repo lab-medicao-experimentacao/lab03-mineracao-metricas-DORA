@@ -1,6 +1,9 @@
 """Comparação de releases com respostas simuladas."""
 
 import csv
+import random
+import threading
+import time
 from datetime import datetime, timezone
 
 import pytest
@@ -127,6 +130,56 @@ def test_releases_sem_compare_sao_salvas_com_o_motivo(tmp_path):
         ("org/repo", "v2", "compare_404"),
         ("org/repo", "v3", "compare_422"),
     ]
+
+
+def cadeia(n):
+    """n releases em sequência na janela e respostas variadas para os compares."""
+    releases = [release(f"v{i}", data(1 + i)) for i in range(n)]
+    respostas = {}
+    for i in range(1, n):
+        caminho = f"/repos/org/repo/compare/v{i - 1}...v{i}"
+        if i % 7 == 3:
+            respostas[caminho] = ErroHTTP(404)
+        elif i % 7 == 5:
+            respostas[caminho] = ErroHTTP(422)
+        else:
+            respostas[caminho] = [commit(f"{i}-{k}", data(1)) for k in range(i % 4)]
+    return releases, respostas
+
+
+def test_com_workers_os_compares_da_mesma_release_rodam_juntos_e_o_resultado_nao_muda():
+    releases, respostas = cadeia(20)
+    janela = Janela(data(1), data(31))
+    sequencial = coletar_commits_entre_releases(ClienteFalso(respostas), "org/repo", releases, janela)
+
+    barreira = threading.Barrier(4, timeout=5)  # quebra se não houver 4 compares simultâneos
+    trava = threading.Lock()
+    iniciadas = []
+
+    class ClienteSimultaneo(ClienteFalso):
+        def get_paginated(self, path, params=None, item_key=None):
+            with trava:
+                ordem = len(iniciadas)
+                iniciadas.append(path)
+            if ordem < 8:  # os 8 primeiros compares passam em dois grupos de 4 simultâneos
+                barreira.wait()
+            time.sleep(random.uniform(0, 0.003))
+            return super().get_paginated(path, params, item_key)
+
+    concorrente = coletar_commits_entre_releases(
+        ClienteSimultaneo(respostas), "org/repo", releases, janela, workers=4)
+
+    assert concorrente == sequencial
+    assert list(concorrente.commits_por_release) == list(sequencial.commits_por_release)
+    assert concorrente.releases_com_404 and concorrente.releases_com_erro
+
+
+def test_com_workers_erro_de_credencial_e_propagado():
+    releases, respostas = cadeia(10)
+    respostas["/repos/org/repo/compare/v5...v6"] = ErroHTTP(401)
+    with pytest.raises(ErroHTTP):
+        coletar_commits_entre_releases(
+            ClienteFalso(respostas), "org/repo", releases, Janela(data(1), data(31)), workers=4)
 
 
 def test_erro_de_credencial_e_propagado():

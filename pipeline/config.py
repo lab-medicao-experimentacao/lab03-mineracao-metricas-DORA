@@ -10,6 +10,10 @@ from pathlib import Path
 import yaml
 
 VARIAVEL_TOKEN = "GITHUB_TOKEN"
+# Requisições simultâneas à API (coleta.workers). Poucas, pelas boas práticas do GitHub
+# contra o limite secundário; 1 reproduz a execução sequencial.
+WORKERS_PADRAO = 4
+MAX_WORKERS = 8
 
 
 class ErroConfiguracao(ValueError):
@@ -60,6 +64,7 @@ class Config:
     dir_cache: Path
     dir_processados: Path
     dir_saida: Path
+    workers: int = 1  # requisições simultâneas; o config.yaml sem `coleta` usa WORKERS_PADRAO
 
 
 def carregar_config(caminho: str | Path) -> Config:
@@ -83,6 +88,7 @@ def carregar_config(caminho: str | Path) -> Config:
         inclusao = _secao(bruto["inclusao"], "inclusao")
         amostra = _secao(bruto["amostra"], "amostra")
         caminhos = _secao(bruto["caminhos"], "caminhos")
+        coleta = _secao(bruto.get("coleta", {}), "coleta")  # opcional
         config = Config(
             janela=janela,
             faixas_estrelas=faixas,
@@ -95,6 +101,7 @@ def carregar_config(caminho: str | Path) -> Config:
             dir_cache=Path(caminhos["cache"]),
             dir_processados=Path(caminhos["processados"]),
             dir_saida=Path(caminhos["saida"]),
+            workers=_inteiro(coleta.get("workers", WORKERS_PADRAO), "coleta.workers"),
         )
     except KeyError as e:
         raise ErroConfiguracao(f"chave obrigatória ausente no config: {e}") from e
@@ -208,3 +215,5 @@ def _validar(config: Config) -> None:
             )
     if config.min_releases < 1 or config.min_runs < 1 or config.tamanho_amostra < 1:
         raise ErroConfiguracao("limites de inclusão e tamanho da amostra devem ser positivos")
+    if not 1 <= config.workers <= MAX_WORKERS:
+        raise ErroConfiguracao(f"coleta.workers deve estar entre 1 e {MAX_WORKERS}")

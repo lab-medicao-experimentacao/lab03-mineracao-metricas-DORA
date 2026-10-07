@@ -29,6 +29,11 @@ amostra:
   tamanho: 100
   semente: 42
 
+coleta:
+  # Requisições simultâneas à API (1 a 8; 1 = sequencial). A amostra e os CSVs não mudam
+  # com este valor; a busca de candidatos é sempre sequencial (30 req/min).
+  workers: 4
+
 caminhos:
   cache: data/cache
   processados: data/processed

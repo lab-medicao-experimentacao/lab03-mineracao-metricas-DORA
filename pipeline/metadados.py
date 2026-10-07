@@ -17,6 +17,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from pipeline.config import Janela
+from pipeline.paralelo import mapear
 from pipeline.selecao import ClienteGitHub, corpo_json
 
 log = logging.getLogger(__name__)
@@ -125,20 +126,24 @@ def coletar_contribuidores(cliente: ClienteGitHub, full_name: str) -> int | None
 
 
 def enriquecer_metadados(
-    cliente: ClienteGitHub, repos: Iterable[dict], janela: Janela
+    cliente: ClienteGitHub, repos: Iterable[dict], janela: Janela, workers: int = 1,
 ) -> list[dict]:
     """Copia cada Repo acrescentando `contributors` (nº ou None) e `idade_dias` (dias).
 
     Custa 1 requisição por repositório RECEBIDO. A busca devolve dezenas de milhares
     de candidatos, então esta função não deve ser chamada sobre todos eles: quem
-    decide o subconjunto (ex.: só os sorteados/elegíveis) é o funil (#5).
+    decide o subconjunto (ex.: só os sorteados/elegíveis) é o funil (#5). Com
+    `workers > 1`, as requisições são simultâneas; a ordem de saída é a de entrada.
     """
-    enriquecidos = []
-    for repo in repos:
-        enriquecidos.append(repo | {
+    def enriquecer(repo: dict) -> dict:
+        return repo | {
             "contributors": coletar_contribuidores(cliente, repo["full_name"]),
             "idade_dias": idade_dias(repo["created_at"], janela.fim),
-        })
+        }
+
+    enriquecidos = []
+    for repo in mapear(enriquecer, repos, workers):
+        enriquecidos.append(repo)
         if len(enriquecidos) % INTERVALO_PROGRESSO == 0:
             log.info("metadados: %d repositórios processados", len(enriquecidos))
 

@@ -1,5 +1,8 @@
 import csv
 import logging
+import random
+import threading
+import time
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -687,3 +690,83 @@ def test_erro_nao_definitivo_interrompe_o_funil(status):
 def test_sem_erros_a_etapa_de_acesso_descarta_zero():
     linha = por_etapa(rodar([repo("a/x")], Fontes()))[ETAPA_ACESSIVEL]
     assert linha.n_descartados == 0
+
+
+# --- avaliação concorrente (coleta.workers) ------------------------------------------------
+
+
+class FontesLentas(FontesComErro):
+    """Fontes com atraso aleatório: as threads terminam fora de ordem."""
+
+    def _atraso(self):
+        time.sleep(random.uniform(0, 0.003))
+
+    def usa_actions(self, r):
+        self._atraso()
+        return super().usa_actions(r)
+
+    def runs_de(self, r):
+        self._atraso()
+        return super().runs_de(r)
+
+
+def cenario_variado():
+    candidatos = [repo(f"org/r{k:02d}") for k in range(80)] + [repo("org/fork", fork=True)]
+    perfis = {}
+    com_erro = {}
+    for k in range(80):
+        nome = f"org/r{k:02d}"
+        perfis[nome] = Perfil(
+            actions=k % 6 != 0,
+            releases=[release()] * (3 + k % 4),
+            runs=[run()] * ((k * 11) % 100),
+        )
+        if k % 13 == 5:
+            com_erro[nome] = (("actions", "releases", "runs")[k % 3], (404, 451, 403)[k % 3])
+    return candidatos, perfis, com_erro
+
+
+@pytest.mark.parametrize("tamanho, avaliar_todos", [(3, False), (12, False), (500, False), (12, True)])
+def test_resultado_com_varios_workers_e_identico_ao_sequencial(tamanho, avaliar_todos):
+    candidatos, perfis, com_erro = cenario_variado()
+    resultados = {}
+    for workers in (1, 4):
+        fontes = FontesLentas(com_erro, perfis=perfis)
+        cfg = config(tamanho_amostra=tamanho, workers=workers)
+        resultados[workers] = rodar(candidatos, fontes, cfg, avaliar_todos=avaliar_todos)
+    assert nomes(resultados[4].amostra) == nomes(resultados[1].amostra)
+    assert resultados[4].etapas == resultados[1].etapas
+    assert resultados[4].n_avaliados == resultados[1].n_avaliados
+    assert_cadeia_consistente(resultados[4])
+
+
+def test_com_workers_os_candidatos_sao_avaliados_ao_mesmo_tempo():
+    barreira = threading.Barrier(4, timeout=5)  # quebra se não houver 4 avaliações simultâneas
+
+    class FontesSimultaneas(Fontes):
+        def usa_actions(self, r):
+            barreira.wait()
+            return super().usa_actions(r)
+
+    candidatos = [repo(f"org/r{k:02d}") for k in range(8)]
+    resultado = rodar(candidatos, FontesSimultaneas(), config(tamanho_amostra=8, workers=4))
+    assert len(resultado.amostra) == 8
+
+
+def test_com_workers_avalia_poucos_candidatos_alem_do_necessario():
+    candidatos = [repo(f"org/r{k:02d}") for k in range(80)]
+    fontes = FontesLentas({})
+    resultado = rodar(candidatos, fontes, config(tamanho_amostra=10, workers=4))
+
+    assert resultado.n_avaliados == 10
+    time.sleep(0.05)  # deixa terminar o que já tinha começado
+    assert len(fontes.actions) <= 10 + 2 * 4  # antecipação limitada a 2 × workers
+
+
+def test_com_workers_erro_nao_definitivo_interrompe_o_funil():
+    candidatos = [repo(f"org/r{k:02d}") for k in range(20)]
+    ordem = nomes(ordem_aleatoria(candidatos, 42))
+    fontes = FontesLentas({ordem[3]: ("releases", 500)})
+    with pytest.raises(ErroHTTP) as erro:
+        rodar(candidatos, fontes, config(workers=4))
+    assert erro.value.status_code == 500

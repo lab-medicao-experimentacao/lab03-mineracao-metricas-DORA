@@ -38,7 +38,10 @@
 | Contribuidores quando a API não lista (403 “contributor list is too large”, ex.: `torvalds/linux`) | **Decidido: `contributors = None`** (célula vazia em `repos.csv`) + aviso no log; **contrato 5.2 alterado para `int \| None`**. Na RQ06 o repositório fica fora só do fator “contribuidores” (análise por fator, sem descartá-lo das outras RQs) e o n de cada teste é reportado. Justificativa: imputar um número inventaria dado; descartar o repositório inteiro enviesaria a amostra contra os maiores projetos. *Ameaças (interna/conclusão):* o dado falta de forma não aleatória (só nos históricos muito grandes), o que pode subestimar o quartil superior de contribuidores; reportar quantos são | A (#4) |
 | Como o `GitHubClient` (#2) sinaliza HTTP 403/204 | `pipeline/metadados.py` aceita erro como corpo (`{"message": ...}`) ou como exceção com o texto da API (em `str(e)` ou `e.response.text`); 204/corpo vazio → 0 contribuidores. Ajustar quando #2 definir suas exceções. **Definido em #10:** respostas 4xx levantam `ErroHTTP` (`.status_code`, `.response.text`, mensagem da API em `str(e)`); 404/403 (que não é cota) ficam no cache e são repetidos (mesma exceção) sem nova chamada; 204 → `Response.json = None` | A (#4) / C (#2) |
 | Tempo de recuperação (RQ04): ordem dos runs, falhas iniciais e re-runs | Ordena por `created_at` (desempate por `id`) dentro de cada `workflow_id`, com runs já filtrados por `run_valido`. Segue a letra do enunciado: episódio começa na primeira falha **após um sucesso**; falhas antes do primeiro sucesso da janela não abrem episódio (início desconhecido). Censurados entram na mediana com o tempo até `fim_janela` (limite inferior) e sua proporção é reportada. Início = `run_started_at` da 1ª falha; se posterior ao fim do episódio (a API redefine `run_started_at` a cada re-run), usa-se o `created_at` da falha | C (#12) — **decidido**: mantida a regra literal do enunciado |
-| Mês de workflow runs que bate o teto de 1.000 | Hoje só avisa (log) e registra o período em `RunsColetados.saturados`; o mês segue com os 1.000 runs entregues. Subdividir o mês (semanas/dias) só se o aviso aparecer na coleta real | C (#9) — validar com o grupo |
+| Mês de workflow runs que bate o teto de 1.000 | Hoje só avisa (log) e registra o período em `RunsColetados.saturados`; o mês segue com os 1.000 runs entregues. Subdividir o mês (semanas/dias) só se o aviso aparecer na coleta real. Janela inteira com menos de 1.000 runs vem numa consulta paginada só (⌈n/100⌉ chamadas em vez de 12+); com 1.000 ou mais, mês a mês como antes (mesmos filtros, mesmos runs) | C (#9) — validar com o grupo |
+| Pré-filtro da etapa “≥ 50 runs válidos” do funil | **Decidido: sem atalho por `total_count`.** A soma dos `total_count` por `status` (as 4 conclusões válidas) foi implementada e testada na API real: em 5 de 18 repositórios veio abaixo dos runs listados (até 75 % a menos; o mesmo `total_count` oscilou 1.536 → 1.254 → 1.536 em consultas seguidas), o que descartaria elegíveis e mudaria a amostra. A etapa segue contando os runs listados com `run_valido` (critério de sempre); a economia vem de listar a janela numa consulta quando ela tem menos de 1.000 runs (descartados nesta etapa custam 1 chamada em vez de 12) | A (#9, #5) |
+| Concorrência da coleta | **Decidido:** `coleta.workers` (padrão 4, de 1 a 8; 1 = sequencial) threads no funil e nas coletas da amostra; a busca segue sequencial (30 req/min). O `GitHubClient` coordena cota (reservada antes de cada chamada; esgotada, todas esperam), pausas de limite secundário, ritmo de ≤ 600 req/min e ≤ `workers` requisições em voo. Resultados consumidos na ordem sorteada/da amostra: CSVs idênticos aos de `workers: 1` | A (#10) |
+| Listagem de runs da API não é estável entre execuções | Na fumaça, a mesma consulta mensal (`created=2025-11-01..2025-11-30`, voyager-crew/voyager) devolveu 57 runs e, minutos depois, 101 (44 runs de 03/11 ausentes na 1ª); em outra, a página 2 repetiu 2 runs e omitiu 2. Afeta a coleta antiga e a nova igualmente; o cache congela uma resposta, então a regeneração a partir dele é reprodutível. *Ameaça (interna):* contagens de runs podem variar levemente entre coletas | A (#9) — validar com o grupo |
 | Idade do repositório (`idade_dias`) | `(janela.fim − created_at)` em dias inteiros, arredondado para baixo, com `janela.fim` **exclusivo** (00:00 UTC do dia seguinte ao último dia da janela) — 1 dia a mais que usar o último dia às 00:00 | A (#4) — validar com o grupo |
 | Contribuidores com `anon=true` | Conta também autores sem conta no GitHub (só e-mail); o mesmo autor com e-mails diferentes conta mais de uma vez | A (#4) — enunciado manda `anon=true` |
 
@@ -74,9 +77,10 @@ A janela vive **apenas em `config.yaml`** — nunca hard-coded.
 │   ├── selecao.py             # busca de candidatos fatiada         [A]
 │   ├── metadados.py           # estrelas, linguagem, contrib., idade[A]
 │   ├── funil.py               # filtros + tabela do funil           [A]
+│   ├── paralelo.py            # execução concorrente em ordem (#10) [A]
 │   ├── releases.py            # releases e tags                     [B]
 │   ├── commits.py             # compare entre releases              [B]
-│   └── workflow_runs.py       # runs fatiados por mês               [C]
+│   └── workflow_runs.py       # runs da janela (por mês se ≥ 1.000) [C]
 ├── metricas/                  # cálculo PURO (sem rede) — alvo da cobertura
 │   ├── frequencia.py          # deployment frequency (RQ01)         [A]
 │   ├── classificacao.py       # faixas Elite/High/Medium/Low        [A]
@@ -126,6 +130,10 @@ Estes formatos permitem que A, B e C desenvolvam em paralelo. Os módulos de `pi
 ```python
 class GitHubClient:
     def __init__(self, token: str, cache_dir: Path): ...
+        # extensão (#10), só keywords opcionais: max_simultaneas (teto de requisições em voo,
+        # = coleta.workers no __main__) e intervalo_minimo (ritmo global entre partidas)
+    def cancelar(self) -> None
+        # extensão (#10): acorda as esperas e faz toda nova requisição levantar ColetaCancelada (Ctrl+C)
     def get(self, path: str, params: dict | None = None) -> Response
         # Response tem .json (dict|list) e .headers (dict); usa cache; trata rate limit e 5xx
     def get_paginated(self, path: str, params: dict | None = None, item_key: str | None = None) -> list[dict]
