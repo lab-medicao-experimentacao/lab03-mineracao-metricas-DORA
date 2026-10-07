@@ -48,6 +48,12 @@ A execução busca os candidatos, aplica o funil e coleta metadados, releases, t
 
 Os parâmetros do estudo (janela de observação, faixas de estrelas, critérios de inclusão, tamanho da amostra e semente) ficam em [`config.yaml`](./config.yaml).
 
+`coleta.workers` (padrão 4, de 1 a 8) define quantas requisições à API podem estar em voo ao mesmo
+tempo no funil e na coleta da amostra; a busca de candidatos é sempre sequencial (30 req/min). A amostra
+e os CSVs são os mesmos para qualquer valor (os resultados são gravados na ordem sorteada); use
+`workers: 1` para a execução sequencial. O `Ctrl+C` interrompe todas as threads, e rodar o mesmo comando
+retoma a partir do cache.
+
 | Pasta | Conteúdo | Versionada? |
 |---|---|---|
 | `data/cache/` | respostas cruas da API (permite retomar a coleta) | não |
@@ -60,11 +66,13 @@ um `Ctrl+C` no meio não deixa arquivo pela metade); ao rodar de novo, o que já
 baixado não é requisitado outra vez. Ele espera a renovação da cota quando
 `X-RateLimit-Remaining` chega a 0 (ou a API responde 403/429 de limite, inclusive o
 secundário: `Retry-After` ou 60 s, 120 s, 240 s…) e repete erros 5xx e falhas de rede com
-espera de 1 s, 2 s, 4 s, 8 s… Para recomeçar do zero, apague `data/cache/`.
+espera de 1 s, 2 s, 4 s, 8 s… Com várias threads, a cota é compartilhada: quando acaba, todas
+esperam a renovação; um limite secundário pausa todas; as partidas ficam espaçadas em 0,1 s.
+Para recomeçar do zero, apague `data/cache/`.
 
-O coletor de workflow runs (`pipeline/workflow_runs.py`) consulta um mês por vez
-(push no default branch) e avisa, no log, se algum mês atingir o teto de 1.000
-resultados da API. Ele exporta `data/processed/runs.csv` (`full_name`, `id`,
+O coletor de workflow runs (`pipeline/workflow_runs.py`) consulta a janela inteira de uma vez
+quando ela tem menos de 1.000 runs (push no default branch); senão, um mês por vez, e avisa,
+no log, se algum mês atingir o teto de 1.000 resultados da API. Ele exporta `data/processed/runs.csv` (`full_name`, `id`,
 `workflow_id`, `event`, `head_branch`, `conclusion`, `classe`, `created_at`,
 `run_started_at`, `updated_at`), em que `classe` é `sucesso`, `falha` ou `ignorado`.
 
