@@ -5,6 +5,8 @@ import pytest
 import os
 
 from pipeline.config import (
+    MAX_WORKERS,
+    WORKERS_PADRAO,
     ErroConfiguracao,
     FaixaEstrelas,
     carregar_config,
@@ -75,6 +77,27 @@ def test_consulta_da_faixa_de_estrelas(faixa, esperado):
 def test_config_invalido_gera_erro(escrever_config, substituicoes):
     with pytest.raises(ErroConfiguracao):
         carregar_config(escrever_config(substituicoes))
+
+
+def test_workers_ausente_usa_o_padrao(escrever_config):
+    assert carregar_config(escrever_config()).workers == WORKERS_PADRAO == 4
+
+
+@pytest.mark.parametrize("valor", [1, 4, 8])
+def test_workers_lido_da_secao_coleta(escrever_config, valor):
+    config = carregar_config(escrever_config({"caminhos:": f"coleta:\n  workers: {valor}\ncaminhos:"}))
+    assert config.workers == valor
+
+
+@pytest.mark.parametrize("valor", ["0", "-1", f"{MAX_WORKERS + 1}", "dois", "true", "2.5"])
+def test_workers_invalido_gera_erro(escrever_config, valor):
+    with pytest.raises(ErroConfiguracao):
+        carregar_config(escrever_config({"caminhos:": f"coleta:\n  workers: {valor}\ncaminhos:"}))
+
+
+def test_secao_coleta_que_nao_e_mapeamento_gera_erro(escrever_config):
+    with pytest.raises(ErroConfiguracao):
+        carregar_config(escrever_config({"caminhos:": "coleta: 4\ncaminhos:"}))
 
 
 def test_config_que_nao_e_mapeamento_gera_erro(tmp_path):
