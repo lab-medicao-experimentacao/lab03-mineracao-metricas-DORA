@@ -32,6 +32,8 @@ def em_ordem(
     trabalho demais. Fechar o gerador cancela o que não começou e não espera o que está
     rodando (o cliente com cache torna esse trabalho aproveitável numa próxima execução).
     """
+    if antecipacao is not None and antecipacao < 1:
+        raise ValueError("antecipacao deve ser >= 1 (ou None)")
     if workers <= 1:
         for item in itens:
             try:

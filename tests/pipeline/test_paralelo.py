@@ -104,3 +104,9 @@ def test_fechar_no_meio_nao_espera_tarefas_longas():
     gerador.close()
     assert time.monotonic() - inicio < 2  # não ficou preso esperando as outras
     liberar.set()
+
+
+@pytest.mark.parametrize("antecipacao", [0, -1])
+def test_antecipacao_menor_que_1_e_recusada(antecipacao):
+    with pytest.raises(ValueError):
+        list(em_ordem(lambda x: x, [1, 2], workers=2, antecipacao=antecipacao))

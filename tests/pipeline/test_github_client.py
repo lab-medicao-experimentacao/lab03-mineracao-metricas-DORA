@@ -3,6 +3,7 @@
 import gzip
 import json
 import logging
+import _thread
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -746,6 +747,52 @@ def test_cancelar_interrompe_a_espera_e_impede_novas_requisicoes(tmp_path):
     with pytest.raises(ColetaCancelada):
         c.get("/c")
     assert len(sessao.chamadas) == 1
+
+
+def test_ctrl_c_interrompe_a_espera_na_thread_principal(tmp_path):
+    # no Windows, Event.wait longo ignora o Ctrl+C: a espera tem de ser em fatias curtas
+    c = GitHubClient(TOKEN, tmp_path / "cache", sessao=SessaoFalsa())
+    disparo = threading.Timer(0.2, _thread.interrupt_main)
+    inicio = time.monotonic()
+    disparo.start()
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            c._dormir(5)
+    finally:
+        disparo.join()
+    assert time.monotonic() - inicio < 2
+
+
+def test_cancelar_barra_quem_espera_vaga_no_teto_de_simultaneas(tmp_path):
+    liberar = threading.Event()
+
+    class SessaoPresa(SessaoPorUrl):
+        def get(self, url, params=None, timeout=None):
+            resposta = super().get(url, params, timeout)
+            liberar.wait(5)
+            return resposta
+
+    sessao = SessaoPresa(time.time)
+    c = GitHubClient(TOKEN, tmp_path / "cache", sessao=sessao, intervalo_minimo=0.0,
+                     max_simultaneas=1)
+    erros = []
+
+    def pedir(caminho):
+        try:
+            c.get(caminho)
+        except ColetaCancelada as erro:
+            erros.append(erro)
+
+    threads = [threading.Thread(target=pedir, args=(f"/x{i}",)) for i in range(2)]
+    for thread in threads:
+        thread.start()
+        time.sleep(0.2)  # a 1a ocupa a vaga; a 2a fica esperando o semáforo
+    c.cancelar()
+    liberar.set()
+    for thread in threads:
+        thread.join(5)
+
+    assert len(sessao.chamadas) == 1 and len(erros) == 1
 
 
 @pytest.mark.parametrize("limite", [1, 2, 3])

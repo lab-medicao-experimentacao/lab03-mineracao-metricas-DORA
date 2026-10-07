@@ -64,6 +64,7 @@ TERMOS_LIMITE_SECUNDARIO = ("rate limit", "abuse detection")
 FOLGA_RENOVACAO_S = 1.0     # segundos extras depois do `X-RateLimit-Reset`
 TIMEOUT_S = 30.0
 INTERVALO_PROGRESSO = 100   # loga a cada N requisições feitas à rede
+FATIA_ESPERA_S = 0.5        # esperas longas em fatias, para o Ctrl+C chegar no Windows
 # Espaço mínimo entre partidas de requisições à rede, somando todas as threads: 0,1 s
 # limita a ~600 req/min, abaixo dos 900 pontos/min do limite secundário da REST.
 INTERVALO_MINIMO_S = 0.1
@@ -272,6 +273,8 @@ class GitHubClient:
             sessao = self._sessao_atual()
             try:
                 with self._simultaneas or nullcontext():
+                    if self._cancelada.is_set():  # cancelada enquanto esperava a vaga
+                        raise ColetaCancelada("coleta cancelada")
                     if corpo is None:
                         bruta = sessao.get(URL_BASE + path, params=parametros, timeout=self._timeout)
                     else:
@@ -333,9 +336,15 @@ class GitHubClient:
         return sessao
 
     def _dormir_interrompivel(self, segundos: float) -> None:
-        """Espera real que `cancelar()` interrompe (levanta `ColetaCancelada`)."""
-        if self._cancelada.wait(min(max(segundos, 0.0), threading.TIMEOUT_MAX)):
-            raise ColetaCancelada("coleta cancelada durante a espera")
+        """Espera real que `cancelar()` interrompe (levanta `ColetaCancelada`).
+
+        Em fatias curtas: no Windows um `Event.wait` longo não deixa o Ctrl+C chegar
+        à thread principal até o fim da espera.
+        """
+        fim = time.monotonic() + max(segundos, 0.0)
+        while (restante := fim - time.monotonic()) > 0:
+            if self._cancelada.wait(min(restante, FATIA_ESPERA_S)):
+                raise ColetaCancelada("coleta cancelada durante a espera")
 
     def _contar_acerto_cache(self) -> None:
         with self._trava:
