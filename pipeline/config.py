@@ -103,8 +103,41 @@ def carregar_config(caminho: str | Path) -> Config:
     return config
 
 
+def carregar_dotenv(caminho: str | Path = ".env") -> set[str]:
+    """Copia para o ambiente as variáveis de um arquivo `.env` (CHAVE=valor por linha).
+
+    Sem dependência nova (python-dotenv): aceita comentários `#`, linhas em branco,
+    prefixo `export`, aspas simples/duplas e BOM. Variável já definida no ambiente
+    tem precedência e não é sobrescrita. Arquivo ausente não é erro. Devolve os
+    nomes definidos (nunca os valores, para não vazar o token em log).
+    """
+    caminho = Path(caminho)
+    if not caminho.is_file():
+        return set()
+    definidas = set()
+    for linha in caminho.read_text(encoding="utf-8-sig").splitlines():
+        linha = linha.strip()
+        if not linha or linha.startswith("#") or "=" not in linha:
+            continue
+        if linha.startswith("export "):
+            linha = linha[len("export "):]
+        chave, valor = (parte.strip() for parte in linha.split("=", 1))
+        if len(valor) >= 2 and valor[0] == valor[-1] and valor[0] in "\"'":
+            valor = valor[1:-1]
+        else:
+            valor = valor.split(" #", 1)[0].strip()
+        if chave and chave not in os.environ:
+            os.environ[chave] = valor
+            definidas.add(chave)
+    return definidas
+
+
 def ler_token() -> str:
-    """Lê o token do GitHub da variável de ambiente (nunca do repositório)."""
+    """Lê o token do GitHub da variável de ambiente (nunca do repositório).
+
+    `python -m pipeline` chama `carregar_dotenv()` antes, então um `.env` na pasta de
+    execução (ignorado pelo git) também serve.
+    """
     token = os.environ.get(VARIAVEL_TOKEN, "").strip()
     if not token:
         raise ErroConfiguracao(

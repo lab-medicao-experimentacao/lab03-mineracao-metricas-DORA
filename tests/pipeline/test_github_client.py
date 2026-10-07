@@ -1,5 +1,6 @@
 """GitHubClient com sessão HTTP falsa: sem rede, sem espera real."""
 
+import gzip
 import json
 import logging
 
@@ -9,6 +10,7 @@ from requests.structures import CaseInsensitiveDict
 
 from pipeline.github_client import (
     URL_BASE,
+    ErroGraphQL,
     ErroHTTP,
     GitHubClient,
     Response,
@@ -42,6 +44,13 @@ class SessaoFalsa:
 
     def get(self, url, params=None, timeout=None):
         self.chamadas.append((url, params))
+        return self._proxima()
+
+    def post(self, url, json=None, timeout=None):
+        self.chamadas.append((url, json))
+        return self._proxima()
+
+    def _proxima(self):
         proxima = self.fila.pop(0)
         if isinstance(proxima, Exception):
             raise proxima
@@ -73,6 +82,14 @@ def ok(corpo, **headers):
     return RespostaFalsa(200, corpo, headers)
 
 
+def arquivos_cache(tmp_path):
+    return sorted((tmp_path / "cache").rglob("*.json*"))
+
+
+def ler_registro(arquivo):
+    return json.loads(gzip.decompress(arquivo.read_bytes()))
+
+
 # --- contrato básico -------------------------------------------------------------------
 
 
@@ -92,8 +109,8 @@ def test_token_nao_aparece_no_repr_nem_no_cache(tmp_path):
     c, _, _ = cliente(tmp_path, ok({"a": 1}))
     c.get("/repos/o/r")
     assert TOKEN not in repr(c)
-    for arquivo in (tmp_path / "cache").rglob("*.json"):
-        assert TOKEN not in arquivo.read_text()
+    for arquivo in arquivos_cache(tmp_path):
+        assert TOKEN not in json.dumps(ler_registro(arquivo))
 
 
 def test_token_vazio_e_recusado(tmp_path):
@@ -164,8 +181,8 @@ def test_booleano_vai_como_texto_minusculo(tmp_path):
 def test_cache_corrompido_e_refeito(tmp_path, caplog):
     c, _, _ = cliente(tmp_path, ok({"v": 1}))
     c.get("/x")
-    (arquivo,) = (tmp_path / "cache").rglob("*.json")
-    arquivo.write_text("{meio")
+    (arquivo,) = arquivos_cache(tmp_path)
+    arquivo.write_bytes(gzip.compress(b"{meio"))
 
     c2, sessao2, _ = cliente(tmp_path, ok({"v": 2}))
     with caplog.at_level(logging.WARNING):
@@ -180,11 +197,36 @@ def test_interrupcao_na_gravacao_nao_deixa_arquivo_parcial(tmp_path, monkeypatch
     def interrompe(*args, **kwargs):
         raise KeyboardInterrupt
 
-    monkeypatch.setattr("pipeline.github_client.json.dump", interrompe)
+    monkeypatch.setattr("pipeline.github_client.os.replace", interrompe)
     with pytest.raises(KeyboardInterrupt):
         c.get("/x")
-    assert not list((tmp_path / "cache").rglob("*.json"))
+    assert arquivos_cache(tmp_path) == []
     assert not list((tmp_path / "cache").rglob("*.tmp"))
+
+
+def test_cache_e_gravado_comprimido_com_a_requisicao_e_o_corpo(tmp_path):
+    c, _, _ = cliente(tmp_path, ok({"v": 1}, Link='<x>; rel="next"'))
+    c.get("/repos/o/r", {"per_page": 1})
+    (arquivo,) = arquivos_cache(tmp_path)
+    assert arquivo.name.endswith(".json.gz")
+    registro = ler_registro(arquivo)
+    assert registro["path"] == "/repos/o/r"
+    assert registro["params"] == {"per_page": "1"}
+    assert registro["body"] == {"v": 1}
+    assert registro["headers"] == {"Link": '<x>; rel="next"'}
+
+
+def test_cache_antigo_em_json_sem_compressao_continua_valendo(tmp_path):
+    c1, _, _ = cliente(tmp_path, ok({"v": 1}))
+    c1.get("/x")
+    (comprimido,) = arquivos_cache(tmp_path)
+    antigo = comprimido.with_name(comprimido.name.removesuffix(".gz"))
+    antigo.write_text(json.dumps(ler_registro(comprimido)), encoding="utf-8")
+    comprimido.unlink()
+
+    c2, sessao2, _ = cliente(tmp_path)
+    assert c2.get("/x").json == {"v": 1}
+    assert sessao2.chamadas == []
 
 
 # --- erros -----------------------------------------------------------------------------
@@ -324,13 +366,34 @@ def test_403_de_limite_sem_cabecalhos_espera_60s(tmp_path):
     assert relogio.esperas == [60.0]
 
 
+def test_429_sem_cabecalhos_nem_mensagem_e_limite_e_espera(tmp_path):
+    c, sessao, relogio = cliente(tmp_path, RespostaFalsa(429, bruto=b""), ok({"v": 1}))
+    assert c.get("/x").json == {"v": 1}
+    assert relogio.esperas == [60.0]
+    assert len(sessao.chamadas) == 2
+
+
+def test_403_de_abuse_detection_e_limite_secundario(tmp_path):
+    limite = RespostaFalsa(403, {"message": "You have triggered an abuse detection mechanism."})
+    c, _, relogio = cliente(tmp_path, limite, ok({"v": 1}))
+    assert c.get("/x").json == {"v": 1}
+    assert relogio.esperas == [60.0]
+
+
+def test_limite_secundario_repetido_espera_cada_vez_mais(tmp_path):
+    limite = RespostaFalsa(403, {"message": "You have exceeded a secondary rate limit."})
+    c, _, relogio = cliente(tmp_path, limite, limite, limite, ok({"v": 1}))
+    assert c.get("/x").json == {"v": 1}
+    assert relogio.esperas == [60.0, 120.0, 240.0]
+
+
 def test_403_de_cota_nao_e_guardado_no_cache(tmp_path):
     limite = RespostaFalsa(403, {"message": "API rate limit exceeded"},
                            {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1030"})
     c, _, _ = cliente(tmp_path, limite, ok({"v": 1}), relogio=Relogio(1_000.0))
     c.get("/x")
-    (arquivo,) = (tmp_path / "cache").rglob("*.json")
-    assert json.loads(arquivo.read_text())["status_code"] == 200
+    (arquivo,) = arquivos_cache(tmp_path)
+    assert ler_registro(arquivo)["status_code"] == 200
 
 
 def test_403_de_cota_repetido_desiste_apos_o_limite_de_esperas(tmp_path):
@@ -435,3 +498,72 @@ def test_get_paginated_propaga_erro_http(tmp_path):
     with pytest.raises(ErroHTTP) as e:
         c.get_paginated("/repos/o/r/compare/a...b", item_key="commits")
     assert e.value.status_code == 404
+
+
+# --- GraphQL (usado onde a REST custaria uma chamada por item, ex.: datas das tags) ------
+
+CONSULTA = "query($o: String!) { repository(owner: $o, name: \"r\") { id } }"
+
+
+def test_graphql_envia_consulta_e_devolve_data(tmp_path):
+    c, sessao, _ = cliente(tmp_path, ok({"data": {"repository": {"id": "X"}}}))
+    assert c.graphql(CONSULTA, {"o": "dono"}) == {"repository": {"id": "X"}}
+    assert sessao.chamadas == [(f"{URL_BASE}/graphql", {"query": CONSULTA, "variables": {"o": "dono"}})]
+    assert sessao.headers["Authorization"] == f"Bearer {TOKEN}"
+
+
+def test_graphql_usa_o_cache_e_retoma_em_novo_cliente(tmp_path):
+    c1, sessao1, _ = cliente(tmp_path, ok({"data": {"v": 1}}))
+    c1.graphql(CONSULTA, {"o": "dono"})
+    assert c1.graphql(CONSULTA, {"o": "dono"}) == {"v": 1}
+    assert len(sessao1.chamadas) == 1
+
+    c2, sessao2, _ = cliente(tmp_path)
+    assert c2.graphql(CONSULTA, {"o": "dono"}) == {"v": 1}
+    assert sessao2.chamadas == []
+
+
+def test_graphql_variaveis_diferentes_sao_consultas_diferentes(tmp_path):
+    c, sessao, _ = cliente(tmp_path, ok({"data": {"v": 1}}), ok({"data": {"v": 2}}))
+    assert c.graphql(CONSULTA, {"o": "a"}) == {"v": 1}
+    assert c.graphql(CONSULTA, {"o": "b"}) == {"v": 2}
+    assert len(sessao.chamadas) == 2
+
+
+def test_graphql_com_errors_levanta_e_nao_vai_para_o_cache(tmp_path):
+    erro = ok({"data": {"repository": None},
+               "errors": [{"type": "NOT_FOUND", "message": "Could not resolve to a Repository"}]})
+    c, sessao, _ = cliente(tmp_path, erro, ok({"data": {"v": 1}}))
+    with pytest.raises(ErroGraphQL) as e:
+        c.graphql(CONSULTA, {"o": "dono"})
+    assert "Could not resolve" in str(e.value)
+    assert e.value.tipos == {"NOT_FOUND"}
+    assert c.graphql(CONSULTA, {"o": "dono"}) == {"v": 1}
+    assert len(sessao.chamadas) == 2
+
+
+def test_graphql_rate_limited_espera_a_renovacao_e_repete(tmp_path):
+    limite = ok({"errors": [{"type": "RATE_LIMITED", "message": "API rate limit exceeded"}]},
+                **{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1030",
+                   "X-RateLimit-Resource": "graphql"})
+    c, sessao, relogio = cliente(tmp_path, limite, ok({"data": {"v": 1}}), relogio=Relogio(1_000.0))
+    assert c.graphql(CONSULTA, {"o": "dono"}) == {"v": 1}
+    assert relogio.esperas == [31.0]
+    assert len(sessao.chamadas) == 2
+
+
+def test_graphql_cota_propria_nao_bloqueia_a_rest(tmp_path):
+    zerada = ok({"data": {"v": 1}}, **{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1060",
+                                       "X-RateLimit-Resource": "graphql"})
+    c, _, relogio = cliente(tmp_path, zerada, ok({}), ok({"data": {"v": 2}}), relogio=Relogio(1_000.0))
+    c.graphql(CONSULTA, {"o": "a"})
+    c.get("/repos/o/r")
+    assert relogio.esperas == []
+    c.graphql(CONSULTA, {"o": "b"})
+    assert relogio.esperas == [61.0]
+
+
+def test_graphql_5xx_usa_backoff(tmp_path):
+    c, _, relogio = cliente(tmp_path, RespostaFalsa(502, {"message": "Bad Gateway"}), ok({"data": {"v": 1}}))
+    assert c.graphql(CONSULTA) == {"v": 1}
+    assert relogio.esperas == [1.0]

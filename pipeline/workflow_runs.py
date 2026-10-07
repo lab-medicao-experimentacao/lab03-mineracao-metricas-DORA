@@ -29,6 +29,7 @@ CAMINHO_RUNS = "/repos/{full_name}/actions/runs"
 TETO_RUNS = 1000  # limite da API por consulta com filtros (não é parâmetro do estudo)
 POR_PAGINA = 100  # máximo aceito pela API
 ARQUIVO_RUNS = "runs.csv"
+ARQUIVO_SATURADOS = "runs_meses_saturados.csv"
 COLUNAS_RUNS = (
     "full_name", "id", "workflow_id", "event", "head_branch", "conclusion", "classe",
     "created_at", "run_started_at", "updated_at",
@@ -176,4 +177,23 @@ def salvar_runs(runs_por_repo: Mapping[str, Iterable[dict]], dir_processados: Pa
                     "run_started_at": run["run_started_at"].isoformat(),
                     "updated_at": run["updated_at"].isoformat(),
                 })
+    return caminho
+
+
+def salvar_meses_saturados(
+    saturados_por_repo: Mapping[str, Iterable[str]], dir_processados: Path
+) -> Path:
+    """Salva em ``runs_meses_saturados.csv`` (`full_name`, `periodo`) os meses no teto de 1.000.
+
+    Arquivo só com cabeçalho = nenhum mês da amostra bateu o teto (o enunciado pede
+    para conferir isso).
+    """
+    caminho = Path(dir_processados) / ARQUIVO_SATURADOS
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    with caminho.open("w", encoding="utf-8", newline="") as arquivo:
+        escritor = csv.DictWriter(arquivo, fieldnames=("full_name", "periodo"))
+        escritor.writeheader()
+        for full_name, periodos in saturados_por_repo.items():
+            for periodo in periodos:
+                escritor.writerow({"full_name": full_name, "periodo": periodo})
     return caminho

@@ -34,6 +34,11 @@ RECUPERACAO_ELITE = HORA                 # < 1 hora
 RECUPERACAO_HIGH = DIA                   # < 1 dia
 RECUPERACAO_MEDIUM = SEMANA              # < 1 semana
 
+# Mínimo de métricas com valor para a classificação geral. Qualquer trio das quatro
+# inclui ao menos uma de vazão (frequência, lead time) e uma de estabilidade (CFR,
+# recuperação); com duas, a geral poderia refletir uma só dimensão.
+MIN_METRICAS_GERAL = 3
+
 
 def _frequencia(valor: float) -> str:
     if valor >= FREQUENCIA_ELITE:
@@ -104,16 +109,17 @@ def classificar_metrica(nome: str, valor: float | None) -> str | None:
 def classificacao_geral(categorias: Iterable[str | None]) -> str | None:
     """Mediana dos pontos (Elite=4 … Low=1), arredondada para baixo.
 
-    Métricas sem valor (None) são ignoradas; retorna None se nenhuma tiver valor.
+    Métricas sem valor (None ou NaN do pandas) são ignoradas e a mediana é tirada das
+    restantes; retorna None se menos de `MIN_METRICAS_GERAL` (3) tiverem valor.
     """
     pontos = []
     for categoria in categorias:
-        if categoria is None:
+        if categoria is None or (isinstance(categoria, float) and math.isnan(categoria)):
             continue
         if categoria not in PONTOS:
             raise ValueError(f"categoria inválida: {categoria!r}")
         pontos.append(PONTOS[categoria])
-    if not pontos:
+    if len(pontos) < MIN_METRICAS_GERAL:
         return None
     return CATEGORIAS[math.floor(statistics.median(pontos)) - 1]
 

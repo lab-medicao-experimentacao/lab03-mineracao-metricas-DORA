@@ -9,6 +9,7 @@ import pytest
 from pipeline.config import Config, Janela
 from pipeline.funil import (
     COLUNAS_FUNIL,
+    ETAPA_ACESSIVEL,
     ETAPA_ACTIONS,
     ETAPA_AMOSTRA,
     ETAPA_AVALIADOS,
@@ -24,6 +25,7 @@ from pipeline.funil import (
     salvar_funil,
     usa_github_actions,
 )
+from pipeline.github_client import ErroHTTP, Response
 from pipeline.releases import salvar_releases
 
 INICIO = datetime(2025, 10, 1, tzinfo=timezone.utc)
@@ -227,6 +229,7 @@ def test_etapas_na_ordem_e_colunas_do_contrato():
         ETAPA_CANDIDATOS,
         ETAPA_CADASTRAL,
         ETAPA_AVALIADOS,
+        ETAPA_ACESSIVEL,
         ETAPA_ACTIONS,
         ">= 5 releases publicadas na janela",
         ">= 50 runs válidos na janela",
@@ -270,15 +273,10 @@ def test_filtro_cadastral_desativado_no_config():
     assert sorted(nomes(resultado.amostra)) == ["a/arq", "a/fork"]
 
 
-def test_busca_sem_forks_registra_zero_descartados_e_avisa(caplog):
-    """A Search API omite forks sem `fork:true`: a etapa existe, mas descarta 0 forks."""
-    with caplog.at_level(logging.INFO, logger="pipeline.funil"):
-        resultado = rodar([repo("a/x"), repo("b/y")], Fontes())
-
-    etapa = por_etapa(resultado)[ETAPA_CADASTRAL]
+def test_sem_forks_entre_os_candidatos_a_etapa_registra_zero():
+    etapa = por_etapa(rodar([repo("a/x"), repo("b/y")], Fontes()))[ETAPA_CADASTRAL]
     assert etapa.n_descartados == 0
     assert "fork: 0" in etapa.motivo
-    assert any("fork:true" in r.getMessage() for r in caplog.records)
 
 
 def test_todos_descartados_na_etapa_cadastral():
@@ -344,7 +342,7 @@ def test_limites_vem_do_config():
     resultado = rodar([repo("a/x")], fontes, config(min_releases=2, min_runs=3))
 
     assert nomes(resultado.amostra) == ["a/x"]
-    assert [e.etapa for e in resultado.etapas][4:6] == [
+    assert [e.etapa for e in resultado.etapas][5:7] == [
         ">= 2 releases publicadas na janela", ">= 3 runs válidos na janela",
     ]
 
@@ -635,3 +633,57 @@ def test_salvar_funil_escreve_as_colunas_do_contrato(tmp_path):
 def test_salvar_funil_vazio_escreve_so_cabecalho(tmp_path):
     caminho = salvar_funil([], tmp_path)
     assert caminho.read_text(encoding="utf-8").strip() == ",".join(COLUNAS_FUNIL)
+
+
+# --- erros definitivos da API não derrubam o funil --------------------------------------
+
+
+class FontesComErro(Fontes):
+    """Levanta ErroHTTP(status) na etapa indicada para os repositórios em `com_erro`."""
+
+    def __init__(self, com_erro: dict[str, tuple[str, int]], **kwargs):
+        super().__init__(**kwargs)
+        self.com_erro = com_erro
+
+    def _talvez_erro(self, r, etapa):
+        if self.com_erro.get(r["full_name"], (None,))[0] == etapa:
+            status = self.com_erro[r["full_name"]][1]
+            raise ErroHTTP(Response({"message": "erro"}, status_code=status), f"GET {etapa}")
+
+    def usa_actions(self, r):
+        self._talvez_erro(r, "actions")
+        return super().usa_actions(r)
+
+    def releases_de(self, r):
+        self._talvez_erro(r, "releases")
+        return super().releases_de(r)
+
+    def runs_de(self, r):
+        self._talvez_erro(r, "runs")
+        return super().runs_de(r)
+
+
+@pytest.mark.parametrize("etapa, status", [("actions", 404), ("releases", 451), ("runs", 403), ("runs", 409)])
+def test_erro_definitivo_da_api_descarta_o_repo_com_motivo(etapa, status, caplog):
+    fontes = FontesComErro({"a/quebrado": (etapa, status)})
+    with caplog.at_level(logging.WARNING, logger="pipeline.funil"):
+        resultado = rodar([repo("a/ok"), repo("a/quebrado")], fontes)
+
+    assert nomes(resultado.amostra) == ["a/ok"]
+    linha = por_etapa(resultado)[ETAPA_ACESSIVEL]
+    assert linha.n_descartados == 1
+    assert f"{status}: 1" in linha.motivo
+    assert_cadeia_consistente(resultado)
+    assert "a/quebrado" in caplog.text
+
+
+@pytest.mark.parametrize("status", [401, 500])
+def test_erro_nao_definitivo_interrompe_o_funil(status):
+    fontes = FontesComErro({"a/x": ("actions", status)})
+    with pytest.raises(ErroHTTP):
+        rodar([repo("a/x")], fontes)
+
+
+def test_sem_erros_a_etapa_de_acesso_descarta_zero():
+    linha = por_etapa(rodar([repo("a/x")], Fontes()))[ETAPA_ACESSIVEL]
+    assert linha.n_descartados == 0

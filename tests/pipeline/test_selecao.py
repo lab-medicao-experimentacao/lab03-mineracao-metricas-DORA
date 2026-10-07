@@ -56,6 +56,9 @@ class ClienteFalso:
         assert path == "/search/repositories"
         assert params["sort"] == "stars"
         q = params["q"]
+        # Como a API real: sem `fork:true`, a busca omite os forks.
+        com_forks = q.endswith(" fork:true")
+        q = q.removesuffix(" fork:true")
         if m := re.fullmatch(r"stars:(\d+)\.\.(\d+)", q):
             lo, hi = int(m[1]), int(m[2])
         elif m := re.fullmatch(r"stars:>=(\d+)", q):
@@ -65,6 +68,7 @@ class ClienteFalso:
         filtrados = [
             i for i in self.itens
             if i["stargazers_count"] >= lo and (hi is None or i["stargazers_count"] <= hi)
+            and (com_forks or not i.get("fork"))
         ]
         return sorted(filtrados, key=lambda i: i["stargazers_count"], reverse=True)
 
@@ -200,15 +204,18 @@ def test_busca_com_fixture_real():
 
     assert [r["full_name"] for r in repos] == [i["full_name"] for i in dados["items"]]
     assert cliente.paginados[0]["per_page"] == 100
-    assert cliente.paginados[0]["q"] == "stars:50000..50100"
+    assert cliente.paginados[0]["q"] == "stars:50000..50100 fork:true"
 
 
-def test_busca_nao_filtra_fork_nem_arquivado_na_consulta():
-    cliente = ClienteFalso([item("a/b", 1200) | {"fork": True, "archived": True}])
+def test_busca_inclui_forks_e_arquivados_para_o_funil_contar():
+    # A Search API omite forks sem `fork:true`; com ele o funil registra quantos são forks.
+    cliente = ClienteFalso([item("a/b", 1200) | {"fork": True, "archived": True}, item("a/c", 1300)])
     repos = buscar_candidatos(cliente, [FaixaEstrelas(1000, 1499)])
 
-    assert all("fork" not in p["q"] and "archived" not in p["q"] for p in cliente.gets)
-    assert repos[0]["fork"] is True and repos[0]["archived"] is True
+    assert all(p["q"].endswith(" fork:true") for p in cliente.gets + cliente.paginados)
+    assert all("archived" not in p["q"] for p in cliente.gets)
+    assert {r["full_name"]: r["fork"] for r in repos} == {"a/b": True, "a/c": False}
+    assert repos[1]["archived"] is True
 
 
 def test_busca_coleta_tudo_quando_faixa_excede_o_teto():

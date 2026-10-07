@@ -135,8 +135,34 @@ def test_classificacao_geral_pela_mediana_arredondada_para_baixo(categorias, esp
     assert classificacao_geral(categorias) == esperado
 
 
-def test_classificacao_geral_ignora_metricas_sem_valor():
-    assert classificacao_geral(["Elite", None, "High", None]) == "High"  # mediana 3,5 → 3
+def test_classificacao_geral_com_uma_metrica_sem_valor_usa_as_outras_tres():
+    assert classificacao_geral(["Elite", "High", "Low", None]) == "High"  # mediana de (4, 3, 1)
+    assert classificacao_geral([None, "Elite", "Medium", "Low"]) == "Medium"
+
+
+@pytest.mark.parametrize(
+    "categorias",
+    [
+        ["Elite", None, "High", None],  # só vazão (frequência + lead time)
+        [None, None, "Elite", "Low"],   # só estabilidade (CFR + recuperação)
+        ["Elite", None, None, None],
+    ],
+)
+def test_classificacao_geral_exige_ao_menos_tres_metricas(categorias):
+    # com 2 métricas a geral pode refletir uma só dimensão (vazão ou estabilidade)
+    assert classificacao_geral(categorias) is None
+
+
+def test_classificar_repositorio_sem_episodios_de_recuperacao_usa_tres_metricas():
+    resultado = classificar_repositorio(frequencia=7.5, lead_time=48.0, cfr=0.0, recuperacao=None)
+    assert resultado["recuperacao"] is None
+    assert resultado["geral"] == "Elite"  # mediana de (4, 3, 4)
+
+
+def test_classificacao_geral_trata_nan_como_metrica_sem_valor():
+    # categoria vazia num CSV lido pelo pandas vira NaN (S03, RQ 07)
+    nan = float("nan")
+    assert classificacao_geral(["Elite", "High", "High", nan]) == "High"
 
 
 def test_classificacao_geral_sem_nenhuma_metrica():
