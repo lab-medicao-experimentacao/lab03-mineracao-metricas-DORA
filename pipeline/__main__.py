@@ -46,7 +46,9 @@ def main(argv: list[str] | None = None) -> int:
         config.tamanho_amostra, config.semente,
     )
 
-    cliente = GitHubClient(token, config.dir_cache)
+    # no máximo `workers` requisições em voo, mesmo com tarefas da antecipação do funil
+    # ainda terminando enquanto a etapa seguinte começa
+    cliente = GitHubClient(token, config.dir_cache, max_simultaneas=config.workers)
     try:
         executar(cliente, config, avaliar_todos=args.funil_completo)
     except KeyboardInterrupt:

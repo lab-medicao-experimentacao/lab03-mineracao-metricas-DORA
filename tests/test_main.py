@@ -27,13 +27,25 @@ def test_main_le_token_do_dotenv(escrever_config, monkeypatch, tmp_path):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     (tmp_path / ".env").write_text("GITHUB_TOKEN=token-do-arquivo\n", encoding="utf-8")
     tokens = []
-    monkeypatch.setattr(entrada, "GitHubClient", lambda token, cache: tokens.append(token) or object())
+    monkeypatch.setattr(entrada, "GitHubClient",
+                        lambda token, cache, **opcoes: tokens.append(token) or object())
     monkeypatch.setattr(entrada, "executar", lambda cliente, config, avaliar_todos: None)
     try:
         assert main(["--config", str(escrever_config())]) == 0
     finally:
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     assert tokens == ["token-do-arquivo"]
+
+
+def test_main_limita_as_requisicoes_simultaneas_aos_workers(escrever_config, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "token-de-teste")
+    opcoes_recebidas = []
+    monkeypatch.setattr(entrada, "GitHubClient",
+                        lambda token, cache, **opcoes: opcoes_recebidas.append(opcoes) or object())
+    monkeypatch.setattr(entrada, "executar", lambda cliente, config, avaliar_todos: None)
+    config = escrever_config({"caminhos:": "coleta:\n  workers: 3\ncaminhos:"})
+    assert main(["--config", str(config)]) == 0
+    assert opcoes_recebidas == [{"max_simultaneas": 3}]
 
 
 def test_main_ctrl_c_avisa_que_basta_rodar_de_novo(escrever_config, monkeypatch, caplog):
@@ -239,7 +251,7 @@ def test_main_cancela_o_cliente_ao_sair(escrever_config, monkeypatch):
     eventos = []
 
     class ClienteFalso:
-        def __init__(self, token, cache):
+        def __init__(self, token, cache, **opcoes):
             pass
 
         def cancelar(self):

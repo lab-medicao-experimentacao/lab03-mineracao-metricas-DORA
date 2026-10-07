@@ -748,6 +748,36 @@ def test_cancelar_interrompe_a_espera_e_impede_novas_requisicoes(tmp_path):
     assert len(sessao.chamadas) == 1
 
 
+@pytest.mark.parametrize("limite", [1, 2, 3])
+def test_max_simultaneas_limita_requisicoes_em_voo(tmp_path, limite):
+    em_voo = maximo = 0
+    trava = threading.Lock()
+
+    class SessaoMedidora(SessaoPorUrl):
+        def get(self, url, params=None, timeout=None):
+            nonlocal em_voo, maximo
+            with trava:
+                em_voo += 1
+                maximo = max(maximo, em_voo)
+            try:
+                return super().get(url, params, timeout)
+            finally:
+                with trava:
+                    em_voo -= 1
+
+    relogio = RelogioSeguro()
+    c = GitHubClient(TOKEN, tmp_path / "cache", sessao=SessaoMedidora(relogio, atraso=0.01),
+                     dormir=relogio.dormir, agora=relogio, intervalo_minimo=0.0,
+                     max_simultaneas=limite)
+    em_threads(lambda i: c.get(f"/x{i}"), range(24), n_threads=8)
+    assert maximo == limite
+
+
+def test_max_simultaneas_invalido_e_recusado(tmp_path):
+    with pytest.raises(ValueError):
+        GitHubClient(TOKEN, tmp_path, max_simultaneas=0)
+
+
 def test_sem_sessao_injetada_cada_thread_tem_a_sua(tmp_path):
     c = GitHubClient(TOKEN, tmp_path / "cache")
     principal = c._sessao_atual()

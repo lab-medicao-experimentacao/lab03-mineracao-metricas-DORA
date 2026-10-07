@@ -21,7 +21,8 @@ Contrato 5.1 das DIRETRIZES: `get` devolve um `Response` (`.json`, `.headers`) e
   uma thread passa; esgotada, todas esperam a renovação); respostas fora de ordem não
   aumentam a cota (vale o menor `Remaining` da mesma janela); um 403/429 de limite pausa o
   recurso para todas as threads; um ritmo global (`intervalo_minimo`, 0,1 s ≈ 600 req/min,
-  abaixo dos 900 pontos/min do limite secundário) espaça as partidas; cada thread usa a
+  abaixo dos 900 pontos/min do limite secundário) espaça as partidas; `max_simultaneas`
+  limita as requisições em voo (o pipeline usa `coleta.workers`); cada thread usa a
   própria `requests.Session`. `cancelar()` (Ctrl+C) acorda quem espera e barra novas chamadas.
 """
 
@@ -38,6 +39,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable, Mapping
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -129,11 +131,18 @@ class GitHubClient:
         dormir: Callable[[float], None] | None = None,
         agora: Callable[[], float] = time.time,
         intervalo_minimo: float = INTERVALO_MINIMO_S,
+        max_simultaneas: int | None = None,
     ):
         if not token or not token.strip():
             raise ValueError("token do GitHub vazio")
         if max_tentativas < 1:
             raise ValueError("max_tentativas deve ser >= 1")
+        if max_simultaneas is not None and max_simultaneas < 1:
+            raise ValueError("max_simultaneas deve ser >= 1")
+        # teto de requisições HTTP em voo, somando todas as threads (None = sem teto)
+        self._simultaneas = (
+            threading.BoundedSemaphore(max_simultaneas) if max_simultaneas is not None else None
+        )
         self._cache_dir = Path(cache_dir)
         self._cabecalhos = {
             "Authorization": f"Bearer {token.strip()}",
@@ -262,10 +271,11 @@ class GitHubClient:
                          numero, self.acertos_cache)
             sessao = self._sessao_atual()
             try:
-                if corpo is None:
-                    bruta = sessao.get(URL_BASE + path, params=parametros, timeout=self._timeout)
-                else:
-                    bruta = sessao.post(URL_BASE + path, json=corpo, timeout=self._timeout)
+                with self._simultaneas or nullcontext():
+                    if corpo is None:
+                        bruta = sessao.get(URL_BASE + path, params=parametros, timeout=self._timeout)
+                    else:
+                        bruta = sessao.post(URL_BASE + path, json=corpo, timeout=self._timeout)
             except requests.RequestException as erro:
                 falhas += 1
                 if falhas >= self._max_tentativas:
