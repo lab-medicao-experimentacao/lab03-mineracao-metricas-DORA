@@ -8,6 +8,15 @@ registrado e avisado (nunca ignorado em silêncio).
 O filtro `event=push` e `branch=<default_branch>` é aplicado pela API. Runs com
 `conclusion` ignorada (cancelled etc.) são coletados e gravados com a classe
 `ignorado`; quem conta os válidos é `metricas.run_valido`.
+
+Pré-filtro do funil (`contar_runs_validos_api`): em vez de baixar todos os runs para
+saber se o repositório tem ≥ `min_runs` válidos, soma o `total_count` de uma consulta
+`per_page=1` por conclusão válida, com os mesmos filtros. Sondas na API real
+(2026-10-06) confirmaram que `created=AAAA-MM-DD..AAAA-MM-DD` usa dias UTC inclusivos
+(igual a `T00:00:00Z..T23:59:59Z`, e dias vizinhos somam), que `status` filtra pela
+`conclusion` (inclusive `timed_out` e `startup_failure`; valor desconhecido devolve 0) e
+que o `total_count` é limitado (2.500 num repositório muito ativo), o que não afeta um
+limiar de 50.
 """
 
 from __future__ import annotations
@@ -19,15 +28,20 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from metricas import EVENTO_RUN_VALIDO, classe_conclusao
+from metricas import CONCLUSOES_FALHA, CONCLUSOES_SUCESSO, EVENTO_RUN_VALIDO, classe_conclusao
 from pipeline.config import Janela
-from pipeline.selecao import ClienteGitHub
+from pipeline.selecao import ClienteGitHub, corpo_json
 
 log = logging.getLogger(__name__)
 
 CAMINHO_RUNS = "/repos/{full_name}/actions/runs"
 TETO_RUNS = 1000  # limite da API por consulta com filtros (não é parâmetro do estudo)
 POR_PAGINA = 100  # máximo aceito pela API
+# Conclusões que contam como run válido (metricas), sucesso primeiro: é a mais comum, e o
+# pré-filtro para de contar assim que a soma atinge o limiar.
+CONCLUSOES_CONTADAS = (*sorted(CONCLUSOES_SUCESSO), *sorted(CONCLUSOES_FALHA))
+# Respostas a um filtro que a API não aceita: o pré-filtro desiste e o funil coleta completo.
+STATUS_FILTRO_RECUSADO = frozenset({400, 422})
 ARQUIVO_RUNS = "runs.csv"
 ARQUIVO_SATURADOS = "runs_meses_saturados.csv"
 COLUNAS_RUNS = (
@@ -130,18 +144,64 @@ def coletar_runs(
     return ResultadoRuns(runs, tuple(saturados))
 
 
+def contar_runs_validos_api(
+    cliente: ClienteGitHub, full_name: str, default_branch: str, janela: Janela,
+    parar_em: int | None = None,
+) -> int | None:
+    """Nº de runs válidos na janela pelo `total_count` da API, sem baixar os runs.
+
+    Uma consulta `per_page=1` por conclusão de `CONCLUSOES_CONTADAS`, com os filtros da
+    coleta (`branch`, `event=push`) e `created` = janela inteira (dias UTC inclusivos,
+    `[inicio, fim)`), mais `status=<conclusão>`. Devolve a soma, que é um limite superior
+    do que `contar_runs_validos` contaria nos runs coletados (a coleta só pode perder runs,
+    nos meses que batem o teto de 1.000). Com `parar_em`, para assim que a soma o atinge.
+    Filtro recusado pela API (400/422) → None (contagem desconhecida); outros erros sobem.
+    """
+    caminho = CAMINHO_RUNS.format(full_name=full_name)
+    total = 0
+    for conclusao in CONCLUSOES_CONTADAS:
+        parametros = {
+            "branch": default_branch,
+            "event": EVENTO_RUN_VALIDO,
+            "created": janela.filtro_created(),
+            "status": conclusao,
+            "per_page": 1,
+        }
+        try:
+            resposta = cliente.get(caminho, parametros)
+        except Exception as erro:
+            if getattr(erro, "status_code", None) not in STATUS_FILTRO_RECUSADO:
+                raise
+            log.warning("%s: a API recusou o filtro status=%s (%s); coleta completa",
+                        full_name, conclusao, erro)
+            return None
+        total += int(corpo_json(resposta)["total_count"])
+        if parar_em is not None and total >= parar_em:
+            break
+    return total
+
+
 class RunsColetados:
     """Coletor da etapa 5 do funil (`runs_de` de `executar_funil`), ligado a `coletar_runs`.
 
     Não guarda os runs em memória (um repositório muito ativo chega a 12 mil runs):
     registra só os meses saturados por repositório. `da_amostra` recoleta a amostra
     final, o que não gera novas chamadas enquanto o cliente usar o cache em disco.
+    `teto` é o pré-filtro (`teto_runs` de `executar_funil`): conta pela API, parando
+    em `limiar`.
     """
 
-    def __init__(self, cliente: ClienteGitHub, janela: Janela):
+    def __init__(self, cliente: ClienteGitHub, janela: Janela, limiar: int | None = None):
         self._cliente = cliente
         self._janela = janela
+        self._limiar = limiar
         self.saturados: dict[str, tuple[str, ...]] = {}
+
+    def teto(self, repo: dict) -> int | None:
+        """Limite superior de runs válidos do repositório (None = a API não soube dizer)."""
+        return contar_runs_validos_api(
+            self._cliente, repo["full_name"], repo["default_branch"], self._janela, self._limiar
+        )
 
     def __call__(self, repo: dict) -> list[dict]:
         resultado = coletar_runs(

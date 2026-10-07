@@ -6,11 +6,16 @@ from datetime import date, datetime, timezone
 
 import pytest
 
+from metricas import CONCLUSOES_FALHA, CONCLUSOES_SUCESSO, classe_conclusao
 from pipeline.config import Janela
+from pipeline.funil import contar_runs_validos
+from pipeline.github_client import ErroHTTP, Response
 from pipeline.workflow_runs import (
+    CONCLUSOES_CONTADAS,
     TETO_RUNS,
     RunsColetados,
     coletar_runs,
+    contar_runs_validos_api,
     converter_run,
     fatias_mensais,
     filtro_created,
@@ -202,6 +207,139 @@ def test_da_amostra_segue_a_ordem_da_amostra():
     coletor = RunsColetados(ClienteFalso([item(1, "2025-10-05T00:00:00Z")]), JANELA)
     outra = {"full_name": "org/outra", "default_branch": "main"}
     assert list(coletor.da_amostra([outra, REPO])) == ["org/outra", "org/repo"]
+
+
+# --- pré-filtro por contagem (total_count) ----------------------------------------------
+
+
+class ApiRunsFalsa:
+    """Simula `/actions/runs` como a API real (conferido com sondas em 2026-10-06).
+
+    Filtros: `branch` (= head_branch), `event`, `status` (= conclusion; valor desconhecido
+    devolve 0) e `created` (datas inclusivas, em dias UTC). `total_count` conta todos os
+    filtrados; a lista vem limitada a `per_page` em `get` e ao teto de 1.000 em
+    `get_paginated`.
+    """
+
+    def __init__(self, itens, total_maximo=None):
+        self.itens = itens
+        self.total_maximo = total_maximo  # a API real limita o total_count (ex.: 2.500)
+        self.chamadas = []
+
+    def _filtrar(self, params):
+        inicio, fim = params["created"].split("..")
+        return [
+            i for i in self.itens
+            if inicio <= i["created_at"][:10] <= fim
+            and i["head_branch"] == params["branch"]
+            and i["event"] == params["event"]
+            and ("status" not in params or i["conclusion"] == params["status"])
+        ]
+
+    def get(self, path, params=None):
+        self.chamadas.append(("get", path, dict(params)))
+        filtrados = self._filtrar(params)
+        total = len(filtrados) if self.total_maximo is None else min(len(filtrados), self.total_maximo)
+        return Response({"total_count": total, "workflow_runs": filtrados[: int(params["per_page"])]})
+
+    def get_paginated(self, path, params=None, item_key=None):
+        self.chamadas.append(("get_paginated", path, dict(params)))
+        return self._filtrar(params)[:TETO_RUNS]
+
+
+def test_contagem_faz_uma_consulta_per_page_1_por_conclusao_valida():
+    api = ApiRunsFalsa([
+        item(1, "2025-10-05T00:00:00Z", "success"),
+        item(2, "2025-11-05T00:00:00Z", "failure"),
+        item(3, "2025-12-05T00:00:00Z", "timed_out"),
+        item(4, "2026-01-05T00:00:00Z", "startup_failure"),
+        item(5, "2026-02-05T00:00:00Z", "cancelled"),
+    ])
+
+    assert contar_runs_validos_api(api, "org/repo", "main", JANELA) == 4
+
+    consultas = [params for _, _, params in api.chamadas]
+    assert [p["status"] for p in consultas] == list(CONCLUSOES_CONTADAS)
+    for params in consultas:
+        assert params == {
+            "branch": "main", "event": "push", "created": "2025-10-01..2026-09-30",
+            "status": params["status"], "per_page": 1,
+        }
+    assert {c for _, c, _ in api.chamadas} == {"/repos/org/repo/actions/runs"}
+
+
+def test_conclusoes_contadas_sao_exatamente_as_validas_do_enunciado():
+    assert set(CONCLUSOES_CONTADAS) == CONCLUSOES_SUCESSO | CONCLUSOES_FALHA
+    assert set(CONCLUSOES_CONTADAS) == {"success", "failure", "timed_out", "startup_failure"}
+    assert len(CONCLUSOES_CONTADAS) == len(set(CONCLUSOES_CONTADAS))
+    for ignorada in ("cancelled", "skipped", "neutral", "action_required", "stale", None):
+        assert classe_conclusao(ignorada) == "ignorado"
+    assert all(classe_conclusao(c) != "ignorado" for c in CONCLUSOES_CONTADAS)
+
+
+def test_contagem_para_ao_atingir_o_limiar():
+    api = ApiRunsFalsa([item(i, "2025-10-05T00:00:00Z") for i in range(60)])
+    assert contar_runs_validos_api(api, "org/repo", "main", JANELA, parar_em=50) == 60
+    assert len(api.chamadas) == 1  # success já basta: as outras conclusões não mudam a decisão
+
+
+def test_contagem_abaixo_do_limiar_consulta_todas_as_conclusoes():
+    api = ApiRunsFalsa([item(i, "2025-10-05T00:00:00Z") for i in range(49)])
+    assert contar_runs_validos_api(api, "org/repo", "main", JANELA, parar_em=50) == 49
+    assert len(api.chamadas) == len(CONCLUSOES_CONTADAS)
+
+
+def test_filtro_recusado_pela_api_devolve_none():
+    class ApiQueRecusa(ApiRunsFalsa):
+        def get(self, path, params=None):
+            raise ErroHTTP(Response({"message": "Validation Failed"}, status_code=422), "GET runs")
+
+    assert contar_runs_validos_api(ApiQueRecusa([]), "org/repo", "main", JANELA) is None
+
+
+def test_erro_definitivo_na_contagem_sobe_para_o_funil():
+    class ApiSemRepo(ApiRunsFalsa):
+        def get(self, path, params=None):
+            raise ErroHTTP(Response({"message": "Not Found"}, status_code=404), "GET runs")
+
+    with pytest.raises(ErroHTTP):
+        contar_runs_validos_api(ApiSemRepo([]), "org/repo", "main", JANELA)
+
+
+def _runs_variados() -> list[dict]:
+    """Runs nos limites da janela (UTC), de outros eventos/branches e de todas as conclusões."""
+    conclusoes = ["success", "failure", "timed_out", "startup_failure", "cancelled",
+                  "skipped", "neutral", "action_required", "stale", None]
+    datas = ["2025-09-30T23:59:59Z", "2025-10-01T00:00:00Z", "2025-10-31T23:59:59Z",
+             "2025-11-01T00:00:00Z", "2026-02-28T12:00:00Z", "2026-09-30T23:59:59Z",
+             "2026-10-01T00:00:00Z"]
+    itens, n = [], 0
+    for data in datas:
+        for conclusao in conclusoes:
+            for evento, branch in (("push", "main"), ("push", "dev"), ("schedule", "main")):
+                n += 1
+                itens.append(item(n, data, conclusao, event=evento, head_branch=branch))
+    return itens
+
+
+def test_contagem_da_api_coincide_com_a_contagem_local_dos_runs_coletados():
+    """Mesmos filtros (UTC, branch, push, conclusões válidas): pré-filtro == critério antigo."""
+    api = ApiRunsFalsa(_runs_variados())
+    locais = contar_runs_validos(coletar_runs(api, "org/repo", "main", JANELA).runs, "main", JANELA)
+    assert locais == 5 * 4  # 5 instantes dentro da janela × 4 conclusões válidas
+    assert contar_runs_validos_api(api, "org/repo", "main", JANELA) == locais
+
+
+def test_contagem_limitada_pela_api_continua_acima_do_limiar():
+    api = ApiRunsFalsa([item(i, "2025-10-05T00:00:00Z") for i in range(3000)], total_maximo=2500)
+    assert contar_runs_validos_api(api, "org/repo", "main", JANELA, parar_em=50) >= 50
+
+
+def test_coletor_teto_usa_o_limiar_do_coletor():
+    api = ApiRunsFalsa([item(i, "2025-10-05T00:00:00Z") for i in range(60)])
+    coletor = RunsColetados(api, JANELA, limiar=50)
+    assert coletor.teto(REPO) == 60
+    assert len(api.chamadas) == 1
 
 
 # --- runs.csv --------------------------------------------------------------------------
