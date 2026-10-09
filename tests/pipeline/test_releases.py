@@ -39,6 +39,62 @@ def test_releases_mantem_antecessora_e_ordena_por_publicacao(tmp_path):
     assert linhas[-1]["published_at"] == ""
 
 
+class _Erro5xx(Exception):
+    def __init__(self, status_code):
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+class ClienteQueFalhaEmPaginaGrande(ClienteFalso):
+    """Responde 504 enquanto per_page > limite (como frida/frida com per_page=100)."""
+
+    def __init__(self, releases, limite, status=504):
+        super().__init__(releases)
+        self.limite = limite
+        self.status = status
+
+    def get_paginated(self, path, params=None, item_key=None):
+        self.chamadas.append((path, params, item_key))
+        if params["per_page"] > self.limite:
+            raise _Erro5xx(self.status)
+        return self.releases
+
+
+def test_releases_reduzem_pagina_quando_api_responde_5xx_persistente():
+    release = {"tag_name": "v1", "published_at": "2025-10-10T00:00:00Z",
+               "draft": False, "prerelease": False}
+    cliente = ClienteQueFalhaEmPaginaGrande([release], limite=30)
+
+    releases = coletar_releases(cliente, "frida/frida")
+
+    assert [r["tag_name"] for r in releases] == ["v1"]
+    assert [p["per_page"] for _, p, _ in cliente.chamadas] == [100, 30]
+
+
+def test_releases_propagam_5xx_quando_todos_os_tamanhos_falham():
+    cliente = ClienteQueFalhaEmPaginaGrande([], limite=0)
+
+    try:
+        coletar_releases(cliente, "org/repo")
+    except _Erro5xx as erro:
+        assert erro.status_code == 504
+    else:  # pragma: no cover
+        raise AssertionError("deveria propagar o 504")
+    assert [p["per_page"] for _, p, _ in cliente.chamadas] == [100, 30, 10]
+
+
+def test_releases_nao_reduzem_pagina_em_erro_4xx():
+    cliente = ClienteQueFalhaEmPaginaGrande([], limite=0, status=404)
+
+    try:
+        coletar_releases(cliente, "org/repo")
+    except _Erro5xx as erro:
+        assert erro.status_code == 404
+    else:  # pragma: no cover
+        raise AssertionError("deveria propagar o 404")
+    assert len(cliente.chamadas) == 1
+
+
 def _no_tag(nome, alvo):
     return {"name": nome, "target": alvo}
 

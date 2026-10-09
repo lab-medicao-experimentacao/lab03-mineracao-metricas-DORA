@@ -53,6 +53,31 @@ def converter_release(item: dict) -> dict:
     }
 
 
+# Repositórios com muitos assets por release (p. ex. frida/frida) fazem a API responder 504
+# com per_page=100 de forma sistemática; páginas menores respondem normalmente.
+TAMANHOS_PAGINA_RELEASES = (100, 30, 10)
+
+
+def _paginar_releases(cliente: ClienteGitHub, full_name: str) -> list[dict]:
+    """Pagina as releases; em 5xx persistente, recomeça com páginas menores.
+
+    O cliente já repete cada 5xx com backoff; só o erro que sobra disso faz trocar de tamanho.
+    O tamanho da página não muda o conjunto de releases, só o custo em requisições.
+    """
+    caminho = f"/repos/{full_name}/releases"
+    for i, tamanho in enumerate(TAMANHOS_PAGINA_RELEASES):
+        try:
+            return cliente.get_paginated(caminho, {"per_page": tamanho})
+        except Exception as erro:
+            status = getattr(erro, "status_code", None)
+            ultimo = i == len(TAMANHOS_PAGINA_RELEASES) - 1
+            if status is None or status < 500 or ultimo:
+                raise
+            log.warning("%s: releases com per_page=%d falharam (%s); tentando per_page=%d",
+                        full_name, tamanho, erro, TAMANHOS_PAGINA_RELEASES[i + 1])
+    raise AssertionError("inalcançável")  # pragma: no cover
+
+
 def coletar_releases(cliente: ClienteGitHub, full_name: str) -> list[dict]:
     """Coleta todas as releases, inclusive a antecessora fora da janela.
 
@@ -60,7 +85,7 @@ def coletar_releases(cliente: ClienteGitHub, full_name: str) -> list[dict]:
     publicação, então a lista é ordenada por ``published_at`` em ordem crescente.
     Drafts sem data de publicação ficam no final.
     """
-    itens = cliente.get_paginated(f"/repos/{full_name}/releases", {"per_page": 100})
+    itens = _paginar_releases(cliente, full_name)
     releases = [converter_release(item) for item in itens]
     releases.sort(key=lambda r: (
         r["published_at"] is None,

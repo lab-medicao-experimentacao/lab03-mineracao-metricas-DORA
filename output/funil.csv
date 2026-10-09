@@ -1,0 +1,9 @@
+etapa,n_restantes,n_descartados,motivo
+candidatos da busca,66219,0,resultado da busca por faixas de estrelas
+sem fork e não arquivado,60083,6136,fork: 773; arquivado: 5363
+avaliados em ordem aleatória,771,59312,não avaliados: amostra de 100 completada antes (semente 42); as etapas seguintes contam só os avaliados
+acessível na API,771,0,"erro HTTP definitivo ao consultar workflows, releases ou runs (nenhum)"
+usa GitHub Actions,434,337,sem workflows (actions/workflows com total_count = 0)
+>= 5 releases publicadas na janela,139,295,menos de 5 releases não draft e não pré-release na janela
+>= 50 runs válidos na janela,100,39,menos de 50 runs de push no default branch com sucesso/falha na janela
+amostra final,100,0,elegíveis além dos 100 primeiros da ordem aleatória
