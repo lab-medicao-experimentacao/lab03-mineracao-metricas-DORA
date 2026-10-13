@@ -55,7 +55,7 @@ A janela vive **apenas em `config.yaml`** — nunca hard-coded.
 - **Python 3.12**, ambiente virtual em `.venv/` (`python -m venv .venv`).
 - Dependências em `requirements.txt` (versões fixadas com `==`):
   - S01: `requests`, `pyyaml`, `pandas`, `pytest`, `pytest-cov`
-  - S02+: `scipy`, `statsmodels`, `scikit-learn`, `matplotlib`/`seaborn`, `pymannkendall` (bônus)
+  - S02+: `scipy`, `statsmodels`, `scikit-learn`, `matplotlib`/`seaborn`, `pymannkendall` (bônus). Cada uma entra no `requirements.txt` (com `==`) só quando o código passar a usá-la; `statsmodels==0.14.4` entrou na #33
 - Execução única: `python -m pipeline --config config.yaml`
 - Testes: `pytest --cov=metricas --cov-report=term-missing --cov-fail-under=80`
 - Todas as datas são tratadas como **`datetime` com timezone UTC**. Ao ler da API: `datetime.fromisoformat(s.replace("Z", "+00:00"))`.
@@ -179,6 +179,14 @@ def lead_time_por_commit(commits_por_release: dict[str, list[Commit]], releases:
 # metricas/cfr.py [C]
 def cfr_ci(runs: list[Run]) -> float | None
 
+# metricas/cfr.py [B, S02, #28]: PROPOSTA. B confirma ou ajusta e atualiza aqui antes do PR
+def release_corretiva(release: Release, anterior: Release | None, commits: list[Commit]) -> bool
+    # heurística da release corretiva; usada pelo CFR (b) e comparada ao consenso na #34 (P/R/F1)
+def cfr_entrega(releases: list[Release], commits_por_release: dict[str, list[Commit]],
+                fim_janela: datetime) -> dict
+    # {cfr (fração 0–1 | None), n_avaliadas, n_falharam, n_censuradas}; R falhou se seguida em ≤ 7 dias
+    # por release corretiva; releases dos últimos 7 dias da janela = censuradas (fora do denominador)
+
 # metricas/recuperacao.py [C]
 def episodios_recuperacao(runs: list[Run], fim_janela: datetime) -> list[dict]  # {inicio, fim, horas, censurado}
 def tempo_recuperacao(runs: list[Run], fim_janela: datetime) -> dict             # {mediana_horas, n_episodios, prop_censurados}
@@ -202,7 +210,9 @@ Unidades: **lead time e recuperação em horas**, frequência em **releases/sema
 
 ---
 
-## 6. Sprint 1 (Lab03S01 — 5 pontos)
+## 6. Sprints
+
+> Sprint 1 (Lab03S01, 5 pontos): seções 6.1 a 6.3. Sprint 2 (Lab03S02, 5 pontos): seções 6.4 a 6.8.
 
 ### 6.1 Critérios de aceite da sprint
 
@@ -255,6 +265,71 @@ Cada etapa registra quantos saíram e o motivo em `funil.csv`. O funil deve ser 
 
 **Issue 6 — Frequência e classificação.** Implementar com TDD a partir das tabelas do enunciado (semanas da janela = dias/7 ≈ 52,1). Casos de teste mínimos: limites exatos de cada faixa (ex.: exatamente 7/semana = Elite; exatamente 15 % CFR = Elite), `None` como entrada, exemplo (4, 3, 3, 1) → High, mediana com número par arredondada para baixo (ex.: (4, 3, 2, 1) → mediana 2,5 → Medium).
 
+### 6.4 Sprint 2: critérios de aceite (enunciado, seção 10)
+
+- [ ] Amostra final com **≥ 300 repositórios** após os filtros, com `output/funil.csv` e `output/repos.csv` atualizados.
+- [ ] Métricas calculadas em **todas as variantes obrigatórias**: frequência; lead time (a) e (b); CFR (a) e (b); recuperação com censura.
+- [ ] Dataset final em CSV + **dicionário de dados** (`output/dicionario_dados.md`).
+- [ ] **Validação manual:** amostra-ouro de 60 repositórios, rótulos independentes dos 3, kappa de Fleiss, consenso e precisão/recall/F1 da heurística de release corretiva (F1 ≥ 0,70 ou refinamento documentado).
+- [ ] Artigo: **seção de metodologia** completa (`artigo/02-metodologia.md`).
+- [ ] Cada integrante é Assignee de ≥ 1 Issue **com código commitado** (a rotulagem sozinha não conta como código).
+
+### 6.5 Sprint 2: Issues (milestone `S02`)
+
+| # | Issue | Assignee | Depende de | Situação em 13/10/2026 |
+|---|---|---|---|---|
+| 27 | Coleta completa: amostra final ≥ 300 | **C** | nenhuma | a fazer |
+| 28 | CFR (b) + heurística de release corretiva + testes | **B** | nenhuma | a fazer |
+| 29 | Amostra-ouro: sorteio de 60 repos e planilhas | **A** | 27 (para o sorteio final) | **feito** (PR #37); refazer o sorteio após a #27 |
+| 30 / 31 / 32 | Rotulagem independente: avaliador A / B / C | A / B / C | 29 rodado sobre os 300 | a fazer |
+| 33 | Kappa de Fleiss e consenso | **A** | 30–32 (para os números) | código pronto (PR #39); roda quando houver rótulos |
+| 34 | Precisão/recall/F1 da heurística × consenso | **B** | 28, 33 | a fazer |
+| 35 | Dataset de métricas por repositório + dicionário de dados | **C** | 27, 28 | a fazer |
+| 36 | Artigo: metodologia | todos | 27, 33, 34 | rascunho (PR #38) com `<preencher …>` |
+
+Caminho crítico: **#27 → #29 (re-sorteio) → #30–#32 → #33 → #34 → #36**. A #27 é a mais urgente, porque sem ela ninguém começa a rotular.
+
+### 6.6 Sprint 2: o que cada integrante precisa fazer
+
+**C (gnvr29): #27, #35, #32**
+1. **#27:** em `config.yaml`, `amostra.tamanho: 300`; rodar `python -m pipeline --config config.yaml`. Os 100 do S01 continuam como prefixo da ordem sorteada e o cache local é reaproveitado. Estimativa: 20 a 30 mil requisições REST, ou seja, 4 a 7 h de cota (3 a 5 h com o cache do S01). Deixar rodando à noite; `Ctrl+C` e rodar de novo retoma. Commitar `output/funil.csv`, `output/repos.csv` e `output/candidatos.csv`; conferir `runs_meses_saturados.csv` e `releases_sem_compare.csv` e registrar as contagens na Issue (vão para a metodologia).
+2. **Compartilhar o cache** (`data/cache/` compactado) com o grupo como anexo de uma release do repositório (ex.: tag `cache-s02`) ou por link do Drive. **Não** versionar no Git, por causa do tamanho e da replicação cruzada.
+3. **Avisar o grupo** quando a #27 terminar, para A refazer o sorteio da amostra-ouro (#29).
+4. **#35:** aplicar `metricas/` à amostra e gerar o CSV final por repositório (todas as variantes, contagens de censura e de releases ignoradas, metadados da RQ 06) + `output/dicionario_dados.md`. Depende do CFR (b) de B (#28).
+
+**B (JoaquimGCVS): #28, #34, #31**
+1. **#28:** implementar a heurística de release corretiva e o CFR (b) em `metricas/cfr.py`, seguindo a proposta de contrato da seção 5.3 (se mudar algo, atualizar o contrato). TDD com os exemplos do enunciado (`v2.3.0 → v2.3.1` falhou; `v2.4.0 → v2.5.0` não). **Não mostrar a heurística a ninguém antes de os três terminarem a rotulagem**, nem rodá-la sobre a amostra-ouro antes disso.
+2. **#34:** depois do consenso (#33), comparar `release_corretiva` com a coluna `corretiva` de `output/amostra_ouro/consenso_releases.csv` usando `precision_recall_fscore_support`. Se o F1 ficar abaixo de 0,70, refinar e reavaliar; registrar cada versão e seu F1 (vai para a metodologia).
+3. **Monorepos:** a release "anterior" pode ser de outro pacote (ver a decisão da #29 na seção 1). Isso afeta o lead time (B); avaliar se é preciso tratar e levar ao grupo.
+
+**A (VitorCostaVianna): #29, #33, #30, #36**
+1. Após a #27: rodar `python -m pipeline.amostra_ouro --config config.yaml` sobre os 300, commitar `output/amostra_ouro/` (sorteio, 6 planilhas vazias e LEIAME) e avisar B e C.
+2. Após a rotulagem: rodar `python -m pipeline.consenso --config config.yaml`, conduzir a reunião dos casos `1-1-1` (`desempates.csv`), commitar as saídas e preencher kappa e consenso na metodologia.
+3. Consolidar a metodologia (#36) com os números de C e o F1 de B.
+
+**Todos: rotulagem (#30, #31, #32).** Ver 6.7.
+
+### 6.7 Rotulagem da amostra-ouro: passo a passo (cada avaliador)
+
+1. Depois que A commitar as planilhas sobre os 300 repositórios, faça `git pull` e abra **só a sua** planilha: `output/amostra_ouro/rotulos_<X>_repos.csv` e `rotulos_<X>_releases.csv` (X = A, B ou C). Leia o `output/amostra_ouro/LEIAME.md`.
+2. Rotule **sem consultar os colegas e sem ver a heurística** (#28): nem o código, nem a saída. Não abra as planilhas dos outros.
+3. Preencha:
+   - `_repos` (60 linhas): `tipo_projeto` ∈ {`biblioteca/framework`, `aplicação/serviço`, `ferramenta CLI`, `outro`} e `entregas_reais` ∈ {`sim`, `não`, `incerto`}, lendo o README e a página de releases (`url_repo`, `url_releases`).
+   - `_releases` (300 linhas): `corretiva` ∈ {`sim`, `não`}, lendo as release notes (`url_release`) e os commits desde a anterior (`url_compare`).
+   - `observacoes`: texto livre e opcional, para casos duvidosos.
+4. Salve como **CSV UTF-8** (Google Planilhas: Arquivo → Fazer download → CSV; Excel: "CSV UTF-8 (delimitado por vírgulas)"). O "CSV" comum do Excel não é UTF-8 e é recusado; `;` como separador é aceito.
+5. Commite só o seu arquivo, na sua Issue (ex.: `docs(rotulos): rótulos do avaliador B (#31)`), em PR próprio. Não edite planilhas de outro avaliador.
+6. Com os três PRs mergeados, A roda o consenso (#33). Os casos `1-1-1` são decididos em reunião e registrados em `desempates.csv`.
+
+### 6.8 Comandos da Sprint 2
+
+```bash
+python -m pipeline --config config.yaml               # coleta / funil / amostra (C, #27)
+python -m pipeline.amostra_ouro --config config.yaml  # sorteio + planilhas (A, #29); --forcar descarta rótulos
+python -m pipeline.consenso --config config.yaml      # kappa, divergências, desempates, consenso (A, #33)
+pytest --cov=metricas --cov-fail-under=80             # antes de qualquer PR
+```
+
 ---
 
 ## 7. Fluxo de trabalho no Git
@@ -268,10 +343,12 @@ Cada etapa registra quantos saíram e o motivo em `funil.csv`. O funil deve ser 
   ```
 - PR com `Closes #N` na descrição, descrição do que foi testado, e sem arquivos de `data/`.
 - Commits pequenos e frequentes (a correção avalia a evolução semanal).
+- Merge do PR por **squash** (`gh pr merge --squash`). O título do PR vira o commit na `main`, então ele também leva `(#N)`.
 
 ## 8. GitHub Projects
 
-- Colunas: **Backlog → To Do (sprint) → In Progress → Review → Done**.
+- Quadro: GitHub Projects da organização `lab-medicao-experimentacao` (projeto nº 3, `lab03-metricas-DORA`).
+- Colunas (campo Status): **Backlog → Ready → In progress → In review → Done**. Issue sem dependência pendente vai para Ready; ao abrir o PR, para In review; ao mergear, para Done.
 - **WIP:** no máximo **2 Issues “In Progress” por integrante**.
 - Toda Issue: Assignee, label (`coleta`, `metricas`, `teste`, `infra`, `artigo`), milestone (`S01`, `S02`, `S03`, `Final`).
 - Atualização mínima: **semanal** (mover cartões, comentar progresso). Penalidade de até 10 % da sprint se negligenciado.
@@ -296,6 +373,10 @@ Ao trabalhar neste repositório, a IA deve:
 6. Rodar `pytest --cov=metricas --cov-fail-under=80` antes de declarar uma tarefa concluída e mostrar o resultado.
 7. Não commitar nem abrir PR sem pedido do integrante responsável.
 8. Ao encontrar ambiguidade no enunciado, registrar a dúvida na seção 1 deste arquivo (ou numa Issue) em vez de decidir silenciosamente.
+9. **Amostra-ouro (S02):** nunca preencher, alterar ou "sugerir" rótulos nas planilhas `output/amostra_ouro/rotulos_*.csv`, que são julgamento humano independente. Nunca mostrar a um avaliador a saída da heurística de release corretiva (#28), nem as planilhas dos outros antes do consenso. Nunca rodar `amostra_ouro --forcar` sem pedido explícito, porque ele descarta rótulos. Nunca commitar rótulos sintéticos de teste fora de `tests/`.
+10. Não abrir Issues nem registrar o link do Projects sem pedido do integrante.
+11. Ao delegar a subagentes, dividir a Issue em tarefas de escopo fechado (contrato/API exata, arquivos que podem ser tocados, critérios de aceite, relatório curto), em vez de um agente que faz tudo.
+12. Antes de começar, conferir na seção 6.5 a situação das Issues da sprint e quem é o dono de cada uma.
 
 ## 11. Definition of Done (qualquer Issue de código)
 
