@@ -29,6 +29,16 @@ amostra:
   tamanho: 100
   semente: 42
 
+amostra_ouro:
+  # Validação manual (seção 6 do enunciado, #29): `python -m pipeline.amostra_ouro`.
+  # Sorteia `tamanho` repositórios de output/repos.csv com pandas
+  # sample(n=tamanho, random_state=semente), após ordenar por full_name, e
+  # `releases_por_repo` releases (deploys da janela) de cada um com
+  # random.Random("<semente>:<full_name>"). Mesma semente = mesmo sorteio.
+  tamanho: 60
+  releases_por_repo: 5
+  semente: 42
+
 coleta:
   # Requisições simultâneas à API (1 a 8; 1 = sequencial). A amostra e os CSVs não mudam
   # com este valor; a busca de candidatos é sempre sequencial (30 req/min).

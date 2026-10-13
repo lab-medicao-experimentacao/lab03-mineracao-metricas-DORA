@@ -19,6 +19,10 @@ inclusao:
 amostra:
   tamanho: 100
   semente: 42
+amostra_ouro:
+  tamanho: 60
+  releases_por_repo: 5
+  semente: 42
 caminhos:
   cache: {tmp}/cache
   processados: {tmp}/processed

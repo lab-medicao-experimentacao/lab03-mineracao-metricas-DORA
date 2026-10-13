@@ -7,6 +7,7 @@ import os
 from pipeline.config import (
     MAX_WORKERS,
     WORKERS_PADRAO,
+    AmostraOuro,
     ErroConfiguracao,
     FaixaEstrelas,
     carregar_config,
@@ -75,6 +76,30 @@ def test_consulta_da_faixa_de_estrelas(faixa, esperado):
     ],
 )
 def test_config_invalido_gera_erro(escrever_config, substituicoes):
+    with pytest.raises(ErroConfiguracao):
+        carregar_config(escrever_config(substituicoes))
+
+
+def test_amostra_ouro_lida_do_config(escrever_config):
+    config = carregar_config(escrever_config())
+    assert config.amostra_ouro == AmostraOuro(tamanho=60, releases_por_repo=5, semente=42)
+
+
+@pytest.mark.parametrize(
+    "substituicoes",
+    [
+        {"amostra_ouro:\n  tamanho: 60\n  releases_por_repo: 5\n  semente: 42\n": ""},  # seção ausente
+        {"amostra_ouro:\n  tamanho: 60\n": "amostra_ouro:\n"},                         # chave ausente
+        {"amostra_ouro:\n  tamanho: 60\n  releases_por_repo: 5\n  semente: 42\n": "amostra_ouro: 60\n"},
+        {"tamanho: 60": "tamanho: 0"},                                                  # não positivo
+        {"releases_por_repo: 5": "releases_por_repo: 0"},
+        {"releases_por_repo: 5": "releases_por_repo: cinco"},
+        {"releases_por_repo: 5\n  semente: 42": "releases_por_repo: 5\n  semente: -1"},  # fora de 0..2³²−1
+        {"releases_por_repo: 5\n  semente: 42": "releases_por_repo: 5\n  semente: 4294967296"},
+        {"releases_por_repo: 5\n  semente: 42": "releases_por_repo: 5\n  semente: true"},
+    ],
+)
+def test_amostra_ouro_invalida_gera_erro(escrever_config, substituicoes):
     with pytest.raises(ErroConfiguracao):
         carregar_config(escrever_config(substituicoes))
 
