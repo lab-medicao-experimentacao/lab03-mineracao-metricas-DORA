@@ -1,0 +1,124 @@
+# 2. Metodologia
+
+> Rascunho em Markdown da seção de Metodologia (Lab03S02, Issue #36). A versão final vai para o template SBC.
+> Trechos marcados com `<preencher …>` dependem da coleta completa (#27), da heurística de release corretiva (#28/#34) ou da validação manual (#33) e são completados quando esses resultados existirem.
+>
+> Revisão pelos três integrantes.
+
+Esta seção descreve a fonte dos dados, a seleção dos repositórios, a coleta, as definições operacionais usadas para aproximar as métricas DORA, o protocolo de validação manual e os métodos estatísticos. Todas as escolhas seguem as definições comuns da disciplina; os parâmetros do estudo (janela, faixas de estrelas, critérios de inclusão, tamanho da amostra e semente aleatória) ficam num único arquivo de configuração versionado (`config.yaml`), e todo o pipeline é executado com um único comando (`python -m pipeline --config config.yaml`).
+
+## 2.1 Fonte de dados
+
+Os dados vêm da API REST do GitHub e, para as datas das tags, da API GraphQL, acessadas por um cliente HTTP próprio (sem bibliotecas prontas de acesso à API). O estudo considera repositórios públicos com mais de 1.000 estrelas que usam GitHub Actions. De cada repositório são coletados:
+
+- **metadados**: estrelas, linguagem principal, data de criação, *default branch* e número de contribuidores;
+- **releases**: `tag_name`, `published_at`, `draft` e `prerelease`;
+- **tags** e a data de autoria do commit apontado por cada uma (variante da RQ 07);
+- **commits entre releases consecutivas**, obtidos pelo endpoint `compare`, com a data de autoria (`commit.author.date`) e a mensagem;
+- **workflow runs** do default branch disparados por `push`, com `workflow_id`, `conclusion`, `created_at`, `run_started_at` e `updated_at`.
+
+## 2.2 Janela de observação
+
+A janela de observação tem 12 meses, de **1º de outubro de 2025 a 30 de setembro de 2026** (dias inclusivos, UTC). Só entram nos cálculos releases publicadas e workflow runs criados dentro dela. A janela foi escolhida fechada e anterior à coleta, de modo que releases e runs da janela não mudam entre execuções do pipeline (exceto por exclusões ou edições feitas pelos próprios projetos), o que torna a coleta reprodutível. A janela tem 365 dias, ou seja, ≈ 52,1 semanas.
+
+## 2.3 Seleção dos repositórios
+
+A seleção é feita em etapas de custo crescente, e cada etapa registra quantos repositórios restaram e por que os demais foram descartados (Tabela 1).
+
+1. **Busca de candidatos.** A busca do GitHub devolve no máximo 1.000 resultados por consulta; por isso, ela é fatiada por faixas de estrelas (1.000–1.499, 1.500–1.999, 2.000–2.999, 3.000–4.999, 5.000–9.999, 10.000–19.999, 20.000–49.999 e ≥ 50.000), e as faixas que ainda excedem o teto são subdivididas automaticamente. A consulta inclui forks explicitamente (`fork:true`), para que sua exclusão seja contada na etapa seguinte em vez de ocorrer de forma silenciosa.
+2. **Exclusão de forks e repositórios arquivados**, a partir dos campos da própria busca (sem custo de API).
+3. **Ordem aleatória.** Os candidatos restantes são embaralhados com semente fixa (42) **antes** de qualquer outro dado ser consultado, e avaliados nessa ordem até que a amostra atinja o tamanho desejado. Os repositórios avaliados formam, assim, uma amostra aleatória simples dos candidatos, e as proporções de descarte das etapas seguintes estimam as da população. Avaliar todos os candidatos custaria uma consulta por repositório a dezenas de milhares de repositórios (dias de cota da API) sem alterar a amostra final.
+4. **Uso de GitHub Actions**: repositórios cujo endpoint de workflows informa `total_count = 0` são descartados antes de qualquer outra coleta.
+5. **Critério mínimo de inclusão**: pelo menos **5 releases** publicadas (não draft e não pré-release) e pelo menos **50 workflow runs válidos** (Seção 2.5) no default branch, dentro da janela.
+
+**Tabela 1 – Funil de seleção.** As contagens das etapas 1 e 2 são absolutas; as das etapas 4 e 5 referem-se aos repositórios avaliados na ordem aleatória.
+
+| Etapa | Restantes | Descartados | Motivo do descarte |
+|---|---:|---:|---|
+| Candidatos da busca | `<preencher após #27>` | – | – |
+| Sem fork e não arquivados | `<…>` | `<…>` | forks; arquivados |
+| Avaliados em ordem aleatória | `<…>` | `<…>` | não avaliados (amostra completada antes) |
+| Usam GitHub Actions | `<…>` | `<…>` | sem workflows |
+| ≥ 5 releases na janela | `<…>` | `<…>` | menos de 5 releases publicadas |
+| ≥ 50 runs válidos na janela | `<…>` | `<…>` | menos de 50 runs válidos |
+| **Amostra final** | **`<≥ 300>`** | | |
+
+*(Referência da amostra-piloto de 100 repositórios do Lab03S01: 66.219 candidatos; 60.083 sem fork e não arquivados; dos 771 avaliados, 434 usavam Actions, 139 tinham ≥ 5 releases e 100 tinham ≥ 50 runs válidos — ou seja, ≈ 13% dos avaliados eram elegíveis.)*
+
+## 2.4 Coleta
+
+O pipeline armazena cada resposta da API em disco (um arquivo JSON comprimido por requisição), de modo que uma coleta interrompida por limite de requisições, falha de rede ou interrupção manual é retomada de onde parou, sem repetir chamadas. O cliente lê os cabeçalhos `X-RateLimit-Remaining` e `X-RateLimit-Reset` e espera a renovação da cota quando ela acaba; respostas 5xx e falhas de rede são repetidas com *backoff* exponencial (1 s, 2 s, 4 s, 8 s…). As requisições são feitas em paralelo por um número fixo de *threads*, e os resultados são gravados na ordem da amostra, de modo que os arquivos gerados não dependem do grau de paralelismo.
+
+Alguns cuidados específicos de cada endpoint:
+
+- **Workflow runs.** Com filtros, a API devolve no máximo 1.000 runs por consulta. Quando a janela inteira tem menos de 1.000 runs, ela é consultada de uma vez; caso contrário, mês a mês, e cada mês que ainda atinge o teto é registrado. `<preencher após #27: nº de meses saturados>`
+- **Commits de cada release.** Cada release da janela é comparada com a release publicada imediatamente anterior (que pode estar fora da janela), com paginação completa do `compare`. Releases sem release anterior (a primeira da história do repositório) ou cujo `compare` falha (404 por tag apagada ou reescrita, 422 ou erro persistente) ficam fora do cálculo de lead time e são contabilizadas por motivo. `<preencher após #27: nº de releases ignoradas por motivo>`
+- **Tags.** A REST não informa a data das tags; a data de cada tag é a data de autoria do commit apontado por ela, obtida pela API GraphQL (seguindo tags anotadas até o commit).
+- **Contribuidores.** Contados com `anon=true` a partir do número da última página de `contributors?per_page=1`; quando a API se recusa a listar (históricos muito grandes), o valor fica ausente e o repositório sai apenas das análises desse fator.
+- **Idade do repositório.** Dias inteiros entre `created_at` e o fim da janela.
+
+## 2.5 Definições operacionais
+
+Como o GitHub não registra deploys nem falhas em produção, as métricas DORA são aproximadas por *proxies*:
+
+| Conceito | Definição operacional |
+|---|---|
+| Deploy | Release publicada (`draft = false`, `prerelease = false`), datada por `published_at` |
+| Data de um commit | `commit.author.date` |
+| Branch | Apenas o *default branch* |
+| Runs considerados | `event = push` no default branch |
+| Sucesso / falha | `conclusion = success` → sucesso; `failure`, `timed_out`, `startup_failure` → falha; demais valores (`cancelled`, `skipped`, `neutral`, `action_required`, `stale` ou vazio) são ignorados |
+| Censura | Medição cujo evento final não ocorre dentro da janela; nunca descartada, sempre contabilizada |
+
+A partir delas, as métricas de cada repositório são:
+
+- **Deployment frequency (RQ 01):** nº de releases da janela ÷ 52,1 semanas, em releases por semana.
+- **Lead time for changes (RQ 02), em horas**, em duas variantes. Para cada release R, os commits incluídos são os do `compare` entre a release anterior e R. *(a) por release:* `published_at(R) − data do commit mais antigo de R`, e o valor do repositório é a mediana entre suas releases; *(b) por commit:* cada commit contribui com `published_at(R) − data do commit`, e o valor do repositório é a mediana de todos os commits de todas as releases.
+- **Change failure rate (RQ 03), como fração**, em duas variantes. *(a) proxy de CI:* runs com falha ÷ (falhas + sucessos). *(b) proxy de entrega:* uma release falhou se for seguida, em até 7 dias, por uma **release corretiva**; o CFR é o nº de releases que falharam ÷ nº de releases avaliadas. Releases publicadas nos últimos 7 dias da janela não podem ser avaliadas e ficam fora do denominador (censura). A heurística automática de release corretiva é: `<preencher após #28/#34: regra final, por exemplo mudança apenas no patch do SemVer e/ou commits com revert/hotfix/fix>`, validada contra a amostra-ouro (Seção 2.7).
+- **Tempo de recuperação (RQ 04), em horas.** Dentro de cada workflow, as execuções válidas são ordenadas por `created_at`. Um episódio de falha começa na primeira falha após um sucesso e termina no próximo sucesso do mesmo workflow; sua duração é `updated_at` do sucesso − `run_started_at` da primeira falha. Falhas anteriores ao primeiro sucesso da janela não abrem episódio, porque seu início é desconhecido. Quando um *re-run* faz o `run_started_at` da falha ficar posterior ao fim do episódio, usa-se o `created_at` da falha. Episódios que não terminam até o fim da janela são **censurados**: entram na mediana com a duração até o fim da janela (um limite inferior), e a proporção de censurados é reportada por repositório. O valor do repositório é a mediana dos episódios de todos os seus workflows.
+
+## 2.6 Classificação DORA e análise de sensibilidade
+
+Cada métrica é classificada em Elite, High, Medium ou Low pelos cortes fixos adotados na disciplina (Tabela 2), em que "1 por mês" corresponde a 12 ÷ (365,25 / 7) ≈ 0,23 release por semana.
+
+**Tabela 2 – Faixas de desempenho DORA usadas no estudo.**
+
+| Métrica | Elite | High | Medium | Low |
+|---|---|---|---|---|
+| Deployment frequency | ≥ 7/semana | ≥ 1 e < 7/semana | ≥ 1/mês e < 1/semana | < 1/mês |
+| Lead time (mediana) | < 1 dia | 1 dia a < 1 semana | 1 semana a < 30 dias | ≥ 30 dias |
+| Change failure rate | ≤ 15% | > 15% e ≤ 30% | > 30% e ≤ 45% | > 45% |
+| Tempo de recuperação (mediana) | < 1 hora | 1 hora a < 1 dia | 1 dia a < 1 semana | ≥ 1 semana |
+
+A classificação geral atribui 4, 3, 2 e 1 pontos a Elite, High, Medium e Low e toma a mediana das quatro notas, arredondada para baixo. Quando uma métrica não pode ser calculada (por exemplo, tempo de recuperação de um repositório sem nenhuma falha), ela é ignorada e a mediana é tomada sobre as demais, desde que restem pelo menos três; com duas ou menos, o repositório fica sem classificação geral. Descartar todo repositório com alguma métrica ausente enviesaria a amostra, porque a ausência de tempo de recuperação ocorre justamente nos repositórios mais estáveis. O número de repositórios classificados com três métricas e sem classificação é reportado.
+
+Para a RQ 07, a classificação é repetida sob diferentes combinações de definições operacionais: `<preencher: combinações finais; proposta inicial — C1 (referência): release, lead time (a), CFR (a); C2: release + pré-release, lead time (b), CFR (b); C3: tag, lead time (b), CFR (a)>`. Na variante por tags, a data de cada deploy é a data de autoria do commit apontado pela tag.
+
+## 2.7 Validação manual (amostra-ouro)
+
+Para estimar o quanto os proxies e a heurística de release corretiva concordam com o julgamento humano, foi construída uma amostra-ouro:
+
+1. **Sorteio.** 60 repositórios são sorteados da amostra final com semente fixa (42), após ordenar a amostra por nome, de forma que o sorteio não dependa da ordem dos arquivos. De cada repositório sorteado, 5 releases da janela (não draft e não pré-release) são sorteadas com uma semente derivada da semente global e do nome do repositório, totalizando 300 releases.
+2. **Rotulagem independente.** Os três integrantes rotulam, cada um na sua planilha, sem consultar os demais e sem ver a saída da heurística: (i) o **tipo do projeto** (biblioteca/framework, aplicação/serviço, ferramenta CLI ou outro); (ii) se as releases do repositório **representam entregas reais ao usuário** (sim, não ou incerto); e (iii) para cada uma das 5 releases, se ela é **corretiva** (sim ou não), a partir das *release notes* e dos commits. As planilhas são geradas automaticamente com links para a página do repositório, de cada release e da comparação com a release anterior. Em monorepos, a release anterior pode pertencer a outro pacote, e a comparação mistura commits de pacotes diferentes; nesses casos, os avaliadores se apoiam nas *release notes*.
+3. **Concordância.** A concordância entre os três avaliadores é medida, em cada dimensão, pelo kappa de Fleiss, que desconta a concordância esperada por acaso, interpretado segundo Landis e Koch (1977). Quando todos os rótulos de uma dimensão caem na mesma categoria, o kappa é indefinido e é reportado como tal. `<preencher após #33: κ por dimensão>`
+4. **Consenso.** Itens com os três rótulos iguais recebem esse rótulo; itens com dois rótulos iguais recebem o da maioria; itens com três rótulos diferentes (possíveis apenas no tipo do projeto e nas entregas reais) são decididos em reunião do grupo, e a decisão e sua justificativa ficam registradas no repositório. `<preencher após #33: nº de itens por tipo de consenso>`
+5. **Avaliação da heurística.** A heurística de release corretiva é comparada ao consenso pelas métricas de precisão, *recall* e F1. Se o F1 ficar abaixo de 0,70, a heurística é refinada e reavaliada; cada versão testada e seu F1 são reportados. `<preencher após #34: versões e F1>`
+
+O tipo do projeto obtido no consenso é usado como fator na RQ 06 (restrito aos 60 repositórios rotulados), e os resultados da validação apoiam a discussão das ameaças à validade.
+
+## 2.8 Análise estatística
+
+As distribuições das métricas de repositórios de software costumam ser muito assimétricas; por isso, todas as métricas são resumidas por **mediana e intervalo interquartil (IQR)**, e só são usados métodos não paramétricos:
+
+- **RQ 05:** correlação de Spearman (ρ, p-valor e n) entre deployment frequency e cada variante do CFR, acompanhada de gráfico de dispersão (com escala logarítmica quando necessário).
+- **RQ 06:** comparação das métricas entre grupos de pelo menos três fatores (`<preencher: fatores escolhidos, por exemplo linguagem principal, quartis de contribuidores, quartis de idade e tipo do projeto>`); fatores numéricos são agrupados por quartis. Usa-se Kruskal-Wallis (tamanho de efeito ε² = H / (n − 1)) ou, com dois grupos, Mann-Whitney (tamanho de efeito Cliff's δ, interpretado segundo Romano et al. (2006)). Os p-valores de todos os testes são corrigidos para comparações múltiplas pelo método de Holm, com nível de significância de 5%.
+- **RQ 07:** para cada par de combinações de definições, a proporção de repositórios que mudam de categoria geral e o kappa de Cohen com ponderação linear, que penaliza menos as trocas entre categorias adjacentes.
+
+As análises são feitas em Python com pandas, SciPy, statsmodels e scikit-learn, a partir dos CSVs gerados pelo pipeline; cada coluna desses arquivos está descrita no dicionário de dados do repositório (`output/dicionario_dados.md`).
+
+## Referências
+
+- Forsgren, N., Humble, J. e Kim, G. (2018). *Accelerate: The Science of Lean Software and DevOps*. IT Revolution Press.
+- DORA. *DORA's software delivery metrics: the four keys*. https://dora.dev/guides/dora-metrics-four-keys/
+- Landis, J. R. e Koch, G. G. (1977). The measurement of observer agreement for categorical data. *Biometrics*, 33(1), 159–174.
+- Romano, J. et al. (2006). Appropriate statistics for ordinal level data: Should we really be using t-test and Cohen's d for evaluating group differences on the NSSE and other surveys? *Annual Meeting of the Florida Association of Institutional Research*.
