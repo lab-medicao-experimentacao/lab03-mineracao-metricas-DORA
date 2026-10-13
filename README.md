@@ -88,6 +88,41 @@ história, 404 de tag apagada/reescrita, 422 ou 5xx persistente) ficam em
 `data/processed/releases_sem_compare.csv` (`full_name`, `tag_name`, `motivo`), e os meses
 de runs que bateram o teto de 1.000 resultados, em `data/processed/runs_meses_saturados.csv`.
 
+## Amostra-ouro (validação manual)
+
+Depois do pipeline (que gera `output/repos.csv`), as planilhas de rotulagem da seção 6 do
+enunciado são geradas com:
+
+```bash
+python -m pipeline.amostra_ouro --config config.yaml
+```
+
+O comando sorteia `amostra_ouro.tamanho` (60) repositórios da amostra final com
+`df.sort_values("full_name").sample(n=60, random_state=42)` e, de cada um,
+`amostra_ouro.releases_por_repo` (5) releases entre as publicadas na janela (não draft, não
+pré-release), com `random.Random("42:<full_name>")`. A semente e os tamanhos ficam em
+`config.yaml → amostra_ouro`; mesma semente e mesmo `repos.csv` = mesmo sorteio. As releases vêm
+do cache em `data/cache` (cerca de uma chamada por repositório sorteado na primeira vez). Saídas em
+`output/amostra_ouro/`:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `sorteio_repos.csv` | `full_name`, `url_repo`, `url_releases`, `linguagem` dos sorteados, na ordem do sorteio |
+| `sorteio_releases.csv` | `full_name`, `tag_name`, `published_at`, `url_release` (página da release), `tag_anterior` (release publicada imediatamente antes, a mesma do lead time) e `url_compare` (commits desde ela; vazio se for a primeira) |
+| `rotulos_<A\|B\|C>_repos.csv` | um por avaliador: colunas do sorteio + `tipo_projeto`, `entregas_reais`, `observacoes` (vazias) |
+| `rotulos_<A\|B\|C>_releases.csv` | um por avaliador: colunas do sorteio + `corretiva`, `observacoes` (vazias) |
+| `LEIAME.md` | instruções de rotulagem e valores válidos |
+
+Valores válidos: `tipo_projeto` ∈ {`biblioteca/framework`, `aplicação/serviço`, `ferramenta CLI`,
+`outro`}; `entregas_reais` ∈ {`sim`, `não`, `incerto`}; `corretiva` ∈ {`sim`, `não`}. Cada
+avaliador preenche só a própria planilha, **sem consultar os demais e sem ver a saída da
+heurística de release corretiva** (as planilhas não a trazem). As planilhas são CSV UTF-8 (com
+BOM, para o Excel) separado por vírgulas.
+
+Se alguma planilha `rotulos_*.csv` já tiver um rótulo ou observação preenchido, o comando recusa
+sobrescrevê-la (código de saída 1, antes de qualquer chamada à API). `--forcar` regrava tudo e
+**descarta os rótulos**.
+
 ## Testes
 
 ```bash

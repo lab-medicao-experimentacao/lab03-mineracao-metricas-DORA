@@ -14,6 +14,8 @@ VARIAVEL_TOKEN = "GITHUB_TOKEN"
 # contra o limite secundário; 1 reproduz a execução sequencial.
 WORKERS_PADRAO = 4
 MAX_WORKERS = 8
+# random_state do pandas (numpy) aceita sementes inteiras em [0, 2³²)
+MAX_SEMENTE = 2**32 - 1
 
 
 class ErroConfiguracao(ValueError):
@@ -52,6 +54,15 @@ class Janela:
 
 
 @dataclass(frozen=True)
+class AmostraOuro:
+    """Parâmetros do sorteio da amostra-ouro (seção 6 do enunciado, #29)."""
+
+    tamanho: int            # repositórios sorteados da amostra final
+    releases_por_repo: int  # releases sorteadas de cada repositório
+    semente: int            # random_state do sorteio (documentada no config.yaml)
+
+
+@dataclass(frozen=True)
 class Config:
     janela: Janela
     faixas_estrelas: tuple[FaixaEstrelas, ...]
@@ -65,6 +76,8 @@ class Config:
     dir_processados: Path
     dir_saida: Path
     workers: int = 1  # requisições simultâneas; o config.yaml sem `coleta` usa WORKERS_PADRAO
+    # obrigatória no config.yaml; None só em Config montado à mão (testes que não a usam)
+    amostra_ouro: AmostraOuro | None = None
 
 
 def carregar_config(caminho: str | Path) -> Config:
@@ -89,6 +102,7 @@ def carregar_config(caminho: str | Path) -> Config:
         amostra = _secao(bruto["amostra"], "amostra")
         caminhos = _secao(bruto["caminhos"], "caminhos")
         coleta = _secao(bruto.get("coleta", {}), "coleta")  # opcional
+        amostra_ouro = _secao(bruto["amostra_ouro"], "amostra_ouro")
         config = Config(
             janela=janela,
             faixas_estrelas=faixas,
@@ -102,6 +116,12 @@ def carregar_config(caminho: str | Path) -> Config:
             dir_processados=Path(caminhos["processados"]),
             dir_saida=Path(caminhos["saida"]),
             workers=_inteiro(coleta.get("workers", WORKERS_PADRAO), "coleta.workers"),
+            amostra_ouro=AmostraOuro(
+                tamanho=_inteiro(amostra_ouro["tamanho"], "amostra_ouro.tamanho"),
+                releases_por_repo=_inteiro(
+                    amostra_ouro["releases_por_repo"], "amostra_ouro.releases_por_repo"),
+                semente=_inteiro(amostra_ouro["semente"], "amostra_ouro.semente"),
+            ),
         )
     except KeyError as e:
         raise ErroConfiguracao(f"chave obrigatória ausente no config: {e}") from e
@@ -217,3 +237,9 @@ def _validar(config: Config) -> None:
         raise ErroConfiguracao("limites de inclusão e tamanho da amostra devem ser positivos")
     if not 1 <= config.workers <= MAX_WORKERS:
         raise ErroConfiguracao(f"coleta.workers deve estar entre 1 e {MAX_WORKERS}")
+    ouro = config.amostra_ouro
+    if ouro is not None:
+        if ouro.tamanho < 1 or ouro.releases_por_repo < 1:
+            raise ErroConfiguracao("amostra_ouro.tamanho e amostra_ouro.releases_por_repo devem ser positivos")
+        if not 0 <= ouro.semente <= MAX_SEMENTE:
+            raise ErroConfiguracao(f"amostra_ouro.semente deve estar entre 0 e {MAX_SEMENTE}")
