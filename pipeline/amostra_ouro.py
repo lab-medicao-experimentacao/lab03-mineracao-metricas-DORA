@@ -290,6 +290,10 @@ de {janela.inicio.date().isoformat()} a {ultimo_dia}.
   (`url_compare`; vazio quando é a primeira release publicada do repositório).
 
 Gerar de novo não apaga planilhas com algum rótulo preenchido (só com `--forcar`).
+
+Com as três planilhas preenchidas, `python -m pipeline.consenso --config config.yaml` calcula a
+concordância (kappa de Fleiss) e o consenso; casos 1-1-1 são decididos em reunião em
+`desempates.csv` (ver README).
 """
 
 
