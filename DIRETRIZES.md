@@ -43,6 +43,7 @@
 | Concorrência da coleta | **Decidido:** `coleta.workers` (padrão 4, de 1 a 8; 1 = sequencial) threads no funil e nas coletas da amostra; a busca segue sequencial (30 req/min). O `GitHubClient` coordena cota (reservada antes de cada chamada; esgotada, todas esperam), pausas de limite secundário, ritmo de ≤ 600 req/min e ≤ `workers` requisições em voo. Resultados consumidos na ordem sorteada/da amostra: CSVs idênticos aos de `workers: 1` | A (#10) |
 | Listagem de runs da API não é estável entre execuções | Na fumaça, a mesma consulta mensal (`created=2025-11-01..2025-11-30`, voyager-crew/voyager) devolveu 57 runs e, minutos depois, 101 (44 runs de 03/11 ausentes na 1ª); em outra, a página 2 repetiu 2 runs e omitiu 2. Afeta a coleta antiga e a nova igualmente; o cache congela uma resposta, então a regeneração a partir dele é reprodutível. *Ameaça (interna):* contagens de runs podem variar levemente entre coletas | A (#9) — validar com o grupo |
 | Idade do repositório (`idade_dias`) | `(janela.fim − created_at)` em dias inteiros, arredondado para baixo, com `janela.fim` **exclusivo** (00:00 UTC do dia seguinte ao último dia da janela) — 1 dia a mais que usar o último dia às 00:00 | A (#4) — validar com o grupo |
+| Amostra-ouro: sorteio e planilhas (#29) | `config.yaml → amostra_ouro` (`tamanho: 60`, `releases_por_repo: 5`, `semente: 42`). Repositórios: `repos.csv` ordenado por `full_name` e `sample(n=60, random_state=42)` (independe da ordem do arquivo). Releases: deploys da janela (não draft, não pré-release, `releases_publicadas`), 5 por repositório com `random.Random("42:<full_name>")`; com menos de 5, todas + aviso. Cada release leva `url_release`, `tag_anterior` (mesma regra do lead time em `commits.py`: release principal publicada imediatamente antes, por `published_at` e tag, podendo ser de antes da janela) e `url_compare`. Planilhas por avaliador **sem nenhuma saída da heurística**; com rótulo ou observação preenchidos não são sobrescritas sem `--forcar`. *Atenção (monorepos):* a anterior pode ser de outro pacote (ex.: `@x/a@1.0` → `@x/b@2.0`), então o `compare` mistura pacotes; o avaliador deve se apoiar nas release notes. O sorteio é refeito quando a amostra final crescer para 300 (#27); só então as planilhas são versionadas | A (#29) — validar com o grupo |
 | Contribuidores com `anon=true` | Conta também autores sem conta no GitHub (só e-mail); o mesmo autor com e-mails diferentes conta mais de uma vez | A (#4) — enunciado manda `anon=true` |
 
 A janela vive **apenas em `config.yaml`** — nunca hard-coded.
@@ -78,6 +79,7 @@ A janela vive **apenas em `config.yaml`** — nunca hard-coded.
 │   ├── metadados.py           # estrelas, linguagem, contrib., idade[A]
 │   ├── funil.py               # filtros + tabela do funil           [A]
 │   ├── paralelo.py            # execução concorrente em ordem (#10) [A]
+│   ├── amostra_ouro.py        # sorteio e planilhas da validação manual (#29) [A]
 │   ├── releases.py            # releases e tags                     [B]
 │   ├── commits.py             # compare entre releases              [B]
 │   └── workflow_runs.py       # runs da janela (por mês se ≥ 1.000) [C]
@@ -195,6 +197,7 @@ Unidades: **lead time e recuperação em horas**, frequência em **releases/sema
 | `data/processed/releases_sem_compare.csv` | B | releases da janela sem commits calculáveis: `full_name, tag_name, motivo` (`sem_anterior`, `compare_404`, `compare_<status>`) |
 | `data/processed/runs.csv` | C | runs válidos e ignorados (com coluna de classe) |
 | `data/processed/runs_meses_saturados.csv` | C | `full_name, periodo` dos meses que bateram o teto de 1.000 runs (só cabeçalho = nenhum) |
+| `output/amostra_ouro/` | A (#29) | `sorteio_repos.csv`, `sorteio_releases.csv`, `rotulos_<A\|B\|C>_repos.csv`, `rotulos_<A\|B\|C>_releases.csv` e `LEIAME.md` (`python -m pipeline.amostra_ouro`; ver README) |
 | `output/dicionario_dados.md` | todos (consolida C no S02) | nome, tipo, unidade, fórmula/origem de cada coluna |
 
 ---

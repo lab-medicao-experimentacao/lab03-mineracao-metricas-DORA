@@ -57,7 +57,7 @@ from pipeline.paralelo import mapear
 from pipeline.releases import coletar_releases
 from pipeline.selecao import ClienteGitHub
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("pipeline.amostra_ouro")  # não "__main__" ao rodar com -m
 
 PASTA_AMOSTRA_OURO = "amostra_ouro"  # dentro de caminhos.saida
 ARQUIVO_SORTEIO_REPOS = "sorteio_repos.csv"
