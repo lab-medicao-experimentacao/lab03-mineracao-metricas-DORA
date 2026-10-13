@@ -207,7 +207,8 @@ def linhas_repos(sorteados: pd.DataFrame) -> list[dict]:
 # --- disco ------------------------------------------------------------------------------
 
 
-def _arquivo_rotulos(avaliador: str, tipo: str) -> str:
+def arquivo_rotulos(avaliador: str, tipo: str) -> str:
+    """Nome da planilha de um avaliador (`tipo` é "repos" ou "releases")."""
     return f"rotulos_{avaliador}_{tipo}.csv"
 
 
@@ -220,7 +221,7 @@ def planilhas_com_rotulos(pasta: Path) -> list[Path]:
     preenchidas = []
     for avaliador in AVALIADORES:
         for tipo in ("repos", "releases"):
-            caminho = Path(pasta) / _arquivo_rotulos(avaliador, tipo)
+            caminho = Path(pasta) / arquivo_rotulos(avaliador, tipo)
             if caminho.is_file() and _tem_rotulos(caminho):
                 preenchidas.append(caminho)
     return preenchidas
@@ -238,7 +239,8 @@ def _tem_rotulos(caminho: Path) -> bool:
         return True
 
 
-def _gravar_csv(caminho: Path, colunas: tuple[str, ...], linhas: Iterable[dict]) -> None:
+def gravar_csv(caminho: Path, colunas: tuple[str, ...], linhas: Iterable[dict]) -> None:
+    """Grava `linhas` em CSV (vírgula, `CODIFICACAO_PLANILHAS`); colunas ausentes ficam vazias."""
     with caminho.open("w", encoding=CODIFICACAO_PLANILHAS, newline="") as f:
         escritor = csv.DictWriter(f, fieldnames=colunas, restval="")
         escritor.writeheader()
@@ -288,6 +290,10 @@ de {janela.inicio.date().isoformat()} a {ultimo_dia}.
   (`url_compare`; vazio quando é a primeira release publicada do repositório).
 
 Gerar de novo não apaga planilhas com algum rótulo preenchido (só com `--forcar`).
+
+Com as três planilhas preenchidas, `python -m pipeline.consenso --config config.yaml` calcula a
+concordância (kappa de Fleiss) e o consenso; casos 1-1-1 são decididos em reunião em
+`desempates.csv` (ver README).
 """
 
 
@@ -337,11 +343,11 @@ def gerar_amostra_ouro(cliente: ClienteGitHub, config: Config, forcar: bool = Fa
     ]
 
     pasta.mkdir(parents=True, exist_ok=True)
-    _gravar_csv(pasta / ARQUIVO_SORTEIO_REPOS, COLUNAS_SORTEIO_REPOS, repos_linhas)
-    _gravar_csv(pasta / ARQUIVO_SORTEIO_RELEASES, COLUNAS_SORTEIO_RELEASES, releases_linhas)
+    gravar_csv(pasta / ARQUIVO_SORTEIO_REPOS, COLUNAS_SORTEIO_REPOS, repos_linhas)
+    gravar_csv(pasta / ARQUIVO_SORTEIO_RELEASES, COLUNAS_SORTEIO_RELEASES, releases_linhas)
     for avaliador in AVALIADORES:
-        _gravar_csv(pasta / _arquivo_rotulos(avaliador, "repos"), COLUNAS_ROTULOS_REPOS, repos_linhas)
-        _gravar_csv(pasta / _arquivo_rotulos(avaliador, "releases"), COLUNAS_ROTULOS_RELEASES,
+        gravar_csv(pasta / arquivo_rotulos(avaliador, "repos"), COLUNAS_ROTULOS_REPOS, repos_linhas)
+        gravar_csv(pasta / arquivo_rotulos(avaliador, "releases"), COLUNAS_ROTULOS_RELEASES,
                     releases_linhas)
     (pasta / ARQUIVO_LEIAME).write_text(texto_leiame(parametros, config.janela), encoding="utf-8")
     log.info("amostra-ouro: %d repositórios e %d releases gravados em %s",

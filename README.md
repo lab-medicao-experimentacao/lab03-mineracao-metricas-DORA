@@ -123,6 +123,36 @@ Se alguma planilha `rotulos_*.csv` já tiver um rótulo ou observação preenchi
 sobrescrevê-la (código de saída 1, antes de qualquer chamada à API). `--forcar` regrava tudo e
 **descarta os rótulos**.
 
+### Concordância e consenso
+
+Com as seis planilhas preenchidas, a concordância (kappa de Fleiss) e o consenso são gerados com:
+
+```bash
+python -m pipeline.consenso --config config.yaml
+```
+
+O comando não acessa a rede. Ele valida as planilhas (arquivo ausente, item faltando, sobrando ou
+repetido, rótulo vazio ou fora dos valores válidos) e, se houver qualquer problema, lista todos e
+não grava nada. Maiúsculas e espaços nas pontas são tolerados, e planilhas salvas pelo Excel com
+`;` são aceitas, desde que em **CSV UTF-8**. Saídas em `output/amostra_ouro/`:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `concordancia.csv` | por dimensão (`tipo_projeto`, `entregas_reais`, `corretiva`): `n_itens`, `n_avaliadores`, `concordancia_observada` (fração de itens com os 3 iguais), `kappa_fleiss` (vazio quando indefinido: todos os rótulos numa só categoria) e `interpretacao` (Landis & Koch) |
+| `divergencias.csv` | itens sem unanimidade, com os 3 rótulos e o tipo (`2x1` ou `1-1-1`) |
+| `desempates.csv` | casos `1-1-1`, a decidir em reunião: preencher `rotulo_final` e `justificativa` |
+| `consenso_repos.csv` | `tipo_projeto` e `entregas_reais` de consenso, cada um com a origem |
+| `consenso_releases.csv` | `corretiva` de consenso e origem |
+
+**Protocolo de desempate:** 3 rótulos iguais → consenso direto (`unanime`); 2 iguais × 1 diferente
+→ maioria simples (`maioria`); 3 diferentes (`1-1-1`, só possível em `tipo_projeto` e
+`entregas_reais`) → decidido em reunião do grupo e registrado em `desempates.csv` (`reuniao`).
+Rodar de novo preserva as decisões já preenchidas; um caso decidido que deixou de ser `1-1-1`
+continua no arquivo (com aviso no log), mas não é aplicado.
+
+Códigos de saída: `0` consenso completo; `1` erro nas planilhas ou em `desempates.csv` (nada é
+gravado); `2` configuração inválida; `3` arquivos gerados, mas há casos `1-1-1` sem decisão.
+
 ## Testes
 
 ```bash
