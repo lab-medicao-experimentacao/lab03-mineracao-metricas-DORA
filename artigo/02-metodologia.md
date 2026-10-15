@@ -35,15 +35,16 @@ A seleção é feita em etapas de custo crescente, e cada etapa registra quantos
 
 | Etapa | Restantes | Descartados | Motivo do descarte |
 |---|---:|---:|---|
-| Candidatos da busca | `<preencher após #27>` | – | – |
-| Sem fork e não arquivados | `<…>` | `<…>` | forks; arquivados |
-| Avaliados em ordem aleatória | `<…>` | `<…>` | não avaliados (amostra completada antes) |
-| Usam GitHub Actions | `<…>` | `<…>` | sem workflows |
-| ≥ 5 releases na janela | `<…>` | `<…>` | menos de 5 releases publicadas |
-| ≥ 50 runs válidos na janela | `<…>` | `<…>` | menos de 50 runs válidos |
-| **Amostra final** | **`<≥ 300>`** | | |
+| Candidatos da busca | 66.219 | – | – |
+| Sem fork e não arquivados | 60.083 | 6.136 | forks: 773; arquivados: 5.363 |
+| Avaliados em ordem aleatória | 2.338 | 57.745 | não avaliados (amostra completada antes) |
+| Acessíveis na API | 2.336 | 2 | erro HTTP definitivo (404: 1; 422: 1) |
+| Usam GitHub Actions | 1.346 | 990 | sem workflows |
+| ≥ 5 releases na janela | 407 | 939 | menos de 5 releases publicadas |
+| ≥ 50 runs válidos na janela | 300 | 107 | menos de 50 runs válidos |
+| **Amostra final** | **300** | | |
 
-*(Referência da amostra-piloto de 100 repositórios do Lab03S01: 66.219 candidatos; 60.083 sem fork e não arquivados; dos 771 avaliados, 434 usavam Actions, 139 tinham ≥ 5 releases e 100 tinham ≥ 50 runs válidos — ou seja, ≈ 13% dos avaliados eram elegíveis.)*
+Dos 2.338 avaliados, 12,8% foram elegíveis. A maior perda ocorre no critério de releases: só 30,2% dos que usam GitHub Actions publicaram pelo menos 5 releases na janela, enquanto 73,7% destes também tinham pelo menos 50 runs válidos. A proporção de elegíveis é próxima à da amostra-piloto de 100 repositórios do Lab03S01 (100 de 771 avaliados, ≈ 13%), cujos 100 repositórios são os primeiros da mesma ordem aleatória e estão contidos na amostra final.
 
 ## 2.4 Coleta
 
@@ -98,7 +99,7 @@ Para a RQ 07, a classificação é repetida sob diferentes combinações de defi
 
 Para estimar o quanto os proxies e a heurística de release corretiva concordam com o julgamento humano, foi construída uma amostra-ouro:
 
-1. **Sorteio.** 60 repositórios são sorteados da amostra final com semente fixa (42), após ordenar a amostra por nome, de forma que o sorteio não dependa da ordem dos arquivos. De cada repositório sorteado, 5 releases da janela (não draft e não pré-release) são sorteadas com uma semente derivada da semente global e do nome do repositório, totalizando 300 releases.
+1. **Sorteio.** 60 repositórios são sorteados da amostra final com semente fixa (42), após ordenar a amostra por nome, de forma que o sorteio não dependa da ordem dos arquivos. De cada repositório sorteado, 5 releases da janela (não draft e não pré-release) são sorteadas com uma semente derivada da semente global e do nome do repositório, totalizando 300 releases. Em 2 delas não há release anterior (a primeira release do repositório), e a planilha não traz o link de comparação; nesses casos, o avaliador decide pelas *release notes*.
 2. **Rotulagem independente.** Os três integrantes rotulam, cada um na sua planilha, sem consultar os demais e sem ver a saída da heurística: (i) o **tipo do projeto** (biblioteca/framework, aplicação/serviço, ferramenta CLI ou outro); (ii) se as releases do repositório **representam entregas reais ao usuário** (sim, não ou incerto); e (iii) para cada uma das 5 releases, se ela é **corretiva** (sim ou não), a partir das *release notes* e dos commits. As planilhas são geradas automaticamente com links para a página do repositório, de cada release e da comparação com a release anterior. Em monorepos, a release anterior pode pertencer a outro pacote, e a comparação mistura commits de pacotes diferentes; nesses casos, os avaliadores se apoiam nas *release notes*.
 3. **Concordância.** A concordância entre os três avaliadores é medida, em cada dimensão, pelo kappa de Fleiss, que desconta a concordância esperada por acaso, interpretado segundo Landis e Koch (1977). Quando todos os rótulos de uma dimensão caem na mesma categoria, o kappa é indefinido e é reportado como tal. `<preencher após #33: κ por dimensão>`
 4. **Consenso.** Itens com os três rótulos iguais recebem esse rótulo; itens com dois rótulos iguais recebem o da maioria; itens com três rótulos diferentes (possíveis apenas no tipo do projeto e nas entregas reais) são decididos em reunião do grupo, e a decisão e sua justificativa ficam registradas no repositório. `<preencher após #33: nº de itens por tipo de consenso>`
