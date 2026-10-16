@@ -68,7 +68,7 @@ após concluírem a rotulagem independente.
 - **Python 3.12**, ambiente virtual em `.venv/` (`python -m venv .venv`).
 - Dependências em `requirements.txt` (versões fixadas com `==`):
   - S01: `requests`, `pyyaml`, `pandas`, `pytest`, `pytest-cov`
-  - S02+: `scipy`, `statsmodels`, `scikit-learn`, `matplotlib`/`seaborn`, `pymannkendall` (bônus). Cada uma entra no `requirements.txt` (com `==`) só quando o código passar a usá-la; `statsmodels==0.14.4` entrou na #33
+  - S02+: `scipy`, `statsmodels`, `scikit-learn`, `matplotlib`/`seaborn`, `pymannkendall` (bônus). Cada uma entra no `requirements.txt` (com `==`) só quando o código passar a usá-la; `statsmodels==0.14.4` entrou na #33; `scikit-learn==1.5.2` é usado na avaliação da heurística
 - Execução única: `python -m pipeline --config config.yaml`
 - Testes: `pytest --cov=metricas --cov-report=term-missing --cov-fail-under=80`
 - Todas as datas são tratadas como **`datetime` com timezone UTC**. Ao ler da API: `datetime.fromisoformat(s.replace("Z", "+00:00"))`.
@@ -94,6 +94,7 @@ após concluírem a rotulagem independente.
 │   ├── paralelo.py            # execução concorrente em ordem (#10) [A]
 │   ├── amostra_ouro.py        # sorteio e planilhas da validação manual (#29) [A]
 │   ├── consenso.py            # kappa de Fleiss, desempates e consenso (#33) [A]
+│   ├── validacao_heuristica.py # avaliação offline e histórico de versões [B]
 │   ├── releases.py            # releases e tags                     [B]
 │   ├── commits.py             # compare entre releases              [B]
 │   └── workflow_runs.py       # runs da janela (por mês se ≥ 1.000) [C]
@@ -103,6 +104,7 @@ após concluírem a rotulagem independente.
 │   ├── lead_time.py           # variantes (a) e (b) (RQ02)          [B]
 │   ├── cfr.py                 # CFR (a) [C]; CFR (b) [B, S02]
 │   ├── concordancia.py        # kappa de Fleiss e consenso por maioria (#33) [A]
+│   ├── validacao.py           # precisão, recall, F1 e contagens [B]
 │   └── recuperacao.py         # tempo de recuperação (RQ04)         [C]
 ├── tests/
 │   ├── conftest.py            # fixtures compartilhadas
@@ -226,6 +228,41 @@ Unidades: **lead time e recuperação em horas**, frequência em **releases/sema
 | `data/processed/runs_meses_saturados.csv` | C | `full_name, periodo` dos meses que bateram o teto de 1.000 runs (só cabeçalho = nenhum) |
 | `output/amostra_ouro/` | A (#29) | `sorteio_repos.csv`, `sorteio_releases.csv`, `rotulos_<A\|B\|C>_repos.csv`, `rotulos_<A\|B\|C>_releases.csv` e `LEIAME.md` (`python -m pipeline.amostra_ouro`); `concordancia.csv`, `divergencias.csv`, `desempates.csv`, `consenso_repos.csv` e `consenso_releases.csv` (`python -m pipeline.consenso`, #33); ver README |
 | `output/dicionario_dados.md` | todos (consolida C no S02) | nome, tipo, unidade, fórmula/origem de cada coluna |
+
+### 5.5 Avaliação da heurística (dono: B)
+
+`metricas.validacao.avaliar_classificacao(reais: list[bool], previstos: list[bool]) -> dict`
+é pura; `True` representa uma release corretiva. Retorna `n_itens`,
+`n_corretivas_reais`, `n_corretivas_previstas`, `vp`, `fp`, `fn`, `vn` (contagens),
+`precisao`, `recall`, `f1` (frações 0–1) e `situacao`.
+Usa `precision_recall_fscore_support(average="binary", pos_label=True, zero_division=0)`.
+Entradas vazias, comprimentos diferentes ou valores não booleanos são erros.
+`F1_MINIMO = 0.70` fica em `metricas/validacao.py`: `atingiu_meta` se F1 ≥ meta,
+`refinar` abaixo dela; `sem_positivos` se o consenso não tiver corretivas (sem
+evidência para validar essa classe, com métricas de denominador zero registradas como 0).
+
+`pipeline/validacao_heuristica.py` [B] oferece
+`python -m pipeline.validacao_heuristica --config config.yaml --versao v1 --descricao "Versão inicial"`.
+Não usa API ou token. Exige sorteios, seis planilhas completas e consensos coerentes,
+antes de executar a heurística. Lê releases e commits dos CSVs processados, preserva
+a antecessora fora da janela e associa os itens por `(full_name, tag_name)`.
+Commits indisponíveis entram como lista vazia e são contabilizados em `n_sem_commits`;
+essa contagem não distingue compare vazio de compare não calculável.
+
+As saídas versionadas ficam em `<caminhos.saida>/validacao_heuristica/`:
+`historico.csv` agrega versões; `<versao>/resultado.json` registra descrição,
+métricas, hashes dos dados e código, versão do scikit-learn e meta;
+também registra `n_repositorios` (inteiro), `janela_inicio` e
+`janela_fim_exclusivo` (datas ISO 8601 UTC). `<versao>/codigo.json` preserva
+o código exato da heurística, do cálculo das métricas e do comando.
+`relatorio.md` reúne todas as tentativas em uma tabela para o artigo, com
+contagens de erros, limitações e aviso quando os dados mudam entre versões.
+`<versao>/comparacao.csv` contém `full_name`, `tag_name`, `corretiva_consenso`,
+`corretiva_prevista` (`sim`/`não`), `acertou`, `sem_commits` (booleanos).
+Uma versão registrada não pode ser reutilizada com resultado, dados, código,
+dependência ou descrição diferentes; repetir entradas idênticas é idempotente.
+O README explica as colunas e os códigos de saída. Refinamentos e seus F1 devem
+ser relatados no artigo; não há refinamento automático nem resultados inventados.
 
 ---
 

@@ -89,8 +89,8 @@ confira principalmente a janela de observação e o tamanho da amostra:
 
 A configuração atual usa o período de **1º de outubro de 2025 a 30 de setembro de
 2026**, exige pelo menos **5 releases e 50 execuções válidas** por repositório e
-está definida para coletar **100 repositórios**. Para a amostra completa do estudo,
-ajuste `amostra.tamanho` para pelo menos **300** antes de executar a coleta.
+está definida para coletar **300 repositórios**, o mínimo da amostra completa do
+estudo.
 
 Execute, a partir da raiz do repositório:
 
@@ -345,6 +345,90 @@ O código de saída informa o resultado da execução:
 | `1` | Erro nas planilhas ou nos desempates; nenhum resultado foi gravado |
 | `2` | Configuração inválida |
 | `3` | Arquivos gerados, mas ainda existem casos sem decisão do grupo |
+
+### Avaliar a identificação automática de correções
+
+Depois de concluir as três rotulagens e gerar o consenso, compare a heurística
+automática com as decisões humanas:
+
+```bash
+python -m pipeline.validacao_heuristica --config config.yaml --versao v1 --descricao "Versão inicial"
+```
+
+O comando funciona sem token e sem rede. Ele lê os sorteios, as seis planilhas e
+os dois arquivos de consenso em `output/amostra_ouro/`, além de `releases.csv` e
+`commits.csv` em `data/processed/`. Os diretórios seguem os caminhos do
+`config.yaml`. Antes de executar a heurística, verifica se as planilhas estão
+completas, se o consenso contém os mesmos itens do sorteio e se está coerente com
+os votos. Entradas ausentes, rótulos pendentes e releases sorteadas que não estão
+nos dados coletados impedem a avaliação e a gravação de resultados.
+
+A comparação é feita por **repositório e tag**, somente para as releases
+sorteadas. Para identificar a antecessora de cada uma, o comando usa o histórico
+das releases principais, inclusive anteriores à janela, com a mesma ordenação
+usada na coleta de commits. Quando não há commits disponíveis para uma release,
+ela continua na avaliação com os demais dados; essa ausência é contabilizada
+para deixar explícita a limitação.
+
+A classe positiva é a release **corretiva**. A precisão responde quantas das
+correções previstas foram confirmadas pelo consenso; o recall responde quantas
+das correções do consenso foram encontradas. O F1 combina as duas medidas. Todas
+são frações de 0 a 1. Quando um denominador é zero, a medida correspondente é
+registrada como `0.0`. Se o consenso não tiver nenhuma corretiva, a execução
+registra essa condição e não considera a detecção da classe validada.
+
+Cada execução usa um identificador de versão e uma descrição. As saídas ficam em
+`output/validacao_heuristica/`:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `historico.csv` | Uma linha por versão, com descrição, contagens, precisão, recall, F1 e situação |
+| `relatorio.md` | Tabela de todas as versões, contagens de erros e limitações, para apoiar a escrita do artigo |
+| `<versao>/resultado.json` | Resultado completo da versão, identificação dos dados e código usados, versão do scikit-learn e meta de F1 |
+| `<versao>/codigo.json` | Cópia do código da heurística, do cálculo das métricas e do comando usados nessa avaliação |
+| `<versao>/comparacao.csv` | Consenso e previsão para cada release sorteada, indicação de acerto e de ausência de commits |
+
+No histórico, `vp` significa corretivas identificadas corretamente; `fp`, releases
+previstas como corretivas que o consenso classificou como não corretivas; `fn`,
+corretivas que a heurística não encontrou; e `vn`, não corretivas identificadas
+corretamente. `n_itens`, `n_corretivas_reais` e `n_corretivas_previstas` informam o
+tamanho da comparação e os totais de positivos de cada lado. `n_sem_commits`
+conta as releases avaliadas sem commits disponíveis. As contagens são inteiros;
+precisão, recall e F1 são frações.
+
+Os campos `dados_sha256` e `codigo_sha256` identificam as entradas e o código
+usados. Repetir a mesma versão com as mesmas entradas, código e descrição não
+duplica o registro. Se algum deles mudar, use uma nova versão: os resultados
+anteriores são preservados. A comparação por item permite examinar os erros
+depois da rotulagem, sem alterar os rótulos humanos.
+
+O relatório inclui todas as tentativas, mesmo as que ficaram abaixo da meta, e
+aponta quando elas usaram entradas diferentes. Nesse caso, uma mudança de F1 pode
+vir dos dados, além das alterações na heurística. As cópias do código permitem
+consultar a implementação exata de cada versão, mesmo depois de novos refinamentos.
+O resultado JSON também registra o número de repositórios avaliados e os limites
+da janela em UTC.
+
+A meta é **F1 ≥ 0,70**. Abaixo dela, refine a heurística com base nos erros
+observados e execute novamente com outra versão e uma descrição do refinamento:
+
+```bash
+python -m pipeline.validacao_heuristica --config config.yaml --versao v2 --descricao "Descrição do refinamento realizado"
+```
+
+Registre no artigo cada versão avaliada e seu resultado, incluindo tentativas
+abaixo da meta. Como os refinamentos usam a mesma amostra-ouro, os resultados
+medem o desempenho nessa amostra e podem ser otimistas para outros projetos.
+
+O código de saída permite distinguir os resultados:
+
+| Código | Significado |
+|---|---|
+| `0` | Avaliação registrada com F1 igual ou superior à meta |
+| `1` | Erro nas entradas ou conflito com uma versão já registrada |
+| `2` | Argumentos ou configuração inválidos |
+| `3` | Avaliação registrada com F1 abaixo da meta; é necessário refinar e reavaliar |
+| `4` | Avaliação registrada, mas o consenso não tem corretivas para validar a detecção |
 
 ## Executar os testes
 
