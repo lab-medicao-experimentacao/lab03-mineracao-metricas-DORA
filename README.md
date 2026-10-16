@@ -1,162 +1,361 @@
 # Lab03 — Mineração de Métricas DORA
 
-Pipeline que coleta dados públicos de repositórios open-source no GitHub (releases, commits e workflow runs do GitHub Actions) e calcula aproximações das quatro métricas DORA.
+Este projeto estuda como repositórios open-source entregam mudanças e lidam com
+falhas. Para isso, coleta releases, commits e execuções do GitHub Actions e usa
+esses dados para calcular aproximações das quatro métricas DORA: frequência de
+entrega, lead time, taxa de falha das mudanças e tempo de recuperação.
 
-- Enunciado: [`03 - Mineração de Métricas DORA.md`](./03%20-%20Mineração%20de%20Métricas%20DORA.md)
-- Diretrizes do grupo (para integrantes e IAs): [`DIRETRIZES.md`](./DIRETRIZES.md)
+Esses dados são evidências indiretas. Publicar uma release não comprova uma
+implantação em produção, assim como uma falha de CI não comprova um problema para
+o usuário. A validação manual ajuda a avaliar essas limitações e a comparar a
+identificação automática de releases corretivas com o julgamento humano.
 
-## Requisitos
+O [enunciado do trabalho](./03%20-%20Mineração%20de%20Métricas%20DORA.md) define as
+regras do estudo. As [diretrizes do grupo](./DIRETRIZES.md) documentam os contratos
+de dados e as decisões de implementação.
 
-- Python 3.12 ou mais recente
-- Um token do GitHub ([como criar](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)). Para dados públicos, um token sem escopos já basta.
+## Preparar o ambiente
 
-## Instalação
+É necessário ter Python 3.12 ou mais recente e um token do GitHub para consultar
+a API. Para a coleta de dados públicos, pode ser usado um token sem escopos.
+Consulte as [instruções para criar um token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+se ainda não tiver um.
+
+Na raiz do repositório, crie um ambiente virtual:
 
 ```bash
 python -m venv .venv
-# Linux/macOS
-source .venv/bin/activate
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt
 ```
 
-## Execução
+Ative esse ambiente com o comando correspondente ao seu sistema.
 
-Defina o token **apenas** como variável de ambiente (nunca o coloque no repositório):
+Linux ou macOS:
 
 ```bash
-# Linux/macOS
-export GITHUB_TOKEN=ghp_...
-# Windows (PowerShell)
-$env:GITHUB_TOKEN = "ghp_..."
+source .venv/bin/activate
 ```
 
-Alternativa: crie um arquivo `.env` na pasta de onde o comando é executado (a raiz do
-repositório) com a linha `GITHUB_TOKEN=ghp_...`. O `.env` está no `.gitignore` e é lido
-pelo próprio pipeline (sem dependência extra); uma variável já definida no ambiente tem
-precedência sobre o arquivo.
+Windows, no PowerShell:
 
-Execute o pipeline com um único comando:
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Com o ambiente ativo, instale as dependências:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+O pipeline lê o token da variável `GITHUB_TOKEN`. Defina-a no terminal em que vai
+executar a coleta, substituindo o valor de exemplo pelo seu token.
+
+Linux ou macOS:
+
+```bash
+export GITHUB_TOKEN="seu_token"
+```
+
+Windows, no PowerShell:
+
+```powershell
+$env:GITHUB_TOKEN = "seu_token"
+```
+
+Como alternativa, crie um arquivo `.env` na raiz do repositório:
+
+```dotenv
+GITHUB_TOKEN=seu_token
+```
+
+O pipeline carrega esse arquivo automaticamente. Se a variável já estiver definida
+no terminal, ela terá preferência. O `.env` está no `.gitignore`; mantenha o token
+fora dos arquivos versionados.
+
+## Configurar e executar a coleta
+
+Os parâmetros do estudo ficam em [config.yaml](./config.yaml). Antes de executar,
+confira principalmente a janela de observação e o tamanho da amostra:
+
+| Configuração | O que controla |
+|---|---|
+| `janela.inicio` e `janela.fim` | Primeiro e último dia do período estudado, ambos inclusivos, em UTC |
+| `selecao` | Faixas de estrelas da busca e exclusão de forks e repositórios arquivados |
+| `inclusao` | Quantidades mínimas de releases e execuções válidas para um repositório entrar na amostra |
+| `amostra.tamanho` | Quantidade de repositórios elegíveis que a coleta busca reunir |
+| `amostra.semente` | Valor que torna reproduzível a ordem aleatória dos candidatos |
+| `coleta.workers` | Quantidade de requisições simultâneas, de 1 a 8 |
+| `caminhos` | Pastas de cache, dados processados e saídas |
+
+A configuração atual usa o período de **1º de outubro de 2025 a 30 de setembro de
+2026**, exige pelo menos **5 releases e 50 execuções válidas** por repositório e
+está definida para coletar **100 repositórios**. Para a amostra completa do estudo,
+ajuste `amostra.tamanho` para pelo menos **300** antes de executar a coleta.
+
+Execute, a partir da raiz do repositório:
 
 ```bash
 python -m pipeline --config config.yaml
 ```
 
-A execução busca os candidatos, aplica o funil e coleta metadados, releases, tags, commits e workflow runs só da amostra. Rodar de novo reaproveita o cache em `data/cache`. Com `--funil-completo`, o funil avalia todos os candidatos (custo máximo de cota, mesma amostra).
+O pipeline primeiro busca candidatos e exclui forks e repositórios arquivados.
+Depois, avalia os demais em uma ordem aleatória reproduzível: verifica se usam
+GitHub Actions e se atendem aos mínimos de releases e execuções válidas na janela.
+Essa sequência de filtros é o **funil de seleção**. Cada etapa registra quantos
+repositórios permaneceram e quantos foram descartados.
 
-Os parâmetros do estudo (janela de observação, faixas de estrelas, critérios de inclusão, tamanho da amostra e semente) ficam em [`config.yaml`](./config.yaml).
+A avaliação para quando encontra a quantidade de repositórios definida na
+configuração. Para essa amostra, a execução reúne metadados e salva releases, tags,
+commits entre releases e execuções de workflows. O comando de coleta produz os
+dados de entrada para os cálculos; ele ainda não exporta um CSV consolidado com
+todas as métricas.
 
-`coleta.workers` (padrão 4, de 1 a 8) define quantas requisições à API podem estar em voo ao mesmo
-tempo no funil e na coleta da amostra; a busca de candidatos é sempre sequencial (30 req/min). A amostra
-e os CSVs são os mesmos para qualquer valor (os resultados são gravados na ordem sorteada); use
-`workers: 1` para a execução sequencial. O `Ctrl+C` interrompe todas as threads, e rodar o mesmo comando
-retoma a partir do cache.
+Para avaliar todos os candidatos, mesmo depois de completar a amostra, use:
+
+```bash
+python -m pipeline --config config.yaml --funil-completo
+```
+
+Essa opção mantém a mesma amostra e registra o funil completo, mas pode consumir
+muito mais requisições à API.
+
+### Pausas, interrupções e retomada
+
+A coleta pode levar horas e pausar quando atingir os limites de requisições do
+GitHub. O cliente acompanha esses limites e espera automaticamente a liberação
+da cota. Erros temporários do servidor e falhas de rede são repetidos com
+intervalos progressivamente maiores.
+
+As respostas recebidas ficam salvas em `data/cache/`. Se precisar interromper,
+pressione `Ctrl+C`; depois, execute o mesmo comando para continuar. As respostas
+já disponíveis no cache são reaproveitadas, evitando repetir a coleta. Os arquivos
+são gravados de forma atômica para que uma interrupção não deixe uma resposta
+parcial no cache. Apagar essa pasta elimina o reaproveitamento e exige novas
+consultas ao GitHub.
+
+O padrão de `coleta.workers` é 4. Usar 1 executa a coleta sequencialmente; valores
+maiores permitem requisições simultâneas dentro dos limites coordenados pelo
+cliente. A ordem dos resultados é preservada, portanto esse ajuste não muda a
+amostra nem a ordem dos CSVs para os mesmos dados de entrada.
+
+## Entender os arquivos gerados
+
+Os arquivos são separados conforme sua função no estudo:
 
 | Pasta | Conteúdo | Versionada? |
 |---|---|---|
-| `data/cache/` | respostas cruas da API (permite retomar a coleta) | não |
-| `data/processed/` | CSVs intermediários | não |
-| `output/` | funil de seleção, dataset final e dicionário de dados | sim |
+| `data/cache/` | Respostas originais da API, usadas para retomar e reproduzir a coleta | Não |
+| `data/processed/` | Dados coletados organizados em CSV para os cálculos | Não |
+| `output/` | Resultados de seleção e arquivos da validação manual | Sim |
 
-O `GitHubClient` (`pipeline/github_client.py`) grava cada resposta da API em
-`data/cache/<aa>/<sha256>.json.gz` (JSON comprimido com gzip; a gravação é atômica, então
-um `Ctrl+C` no meio não deixa arquivo pela metade); ao rodar de novo, o que já foi
-baixado não é requisitado outra vez. Ele espera a renovação da cota quando
-`X-RateLimit-Remaining` chega a 0 (ou a API responde 403/429 de limite, inclusive o
-secundário: `Retry-After` ou 60 s, 120 s, 240 s…) e repete erros 5xx e falhas de rede com
-espera de 1 s, 2 s, 4 s, 8 s… Com várias threads, a cota é compartilhada: quando acaba, todas
-esperam a renovação; um limite secundário pausa todas; as partidas ficam espaçadas em 0,1 s.
-Para recomeçar do zero, apague `data/cache/`.
+O cache guarda uma resposta por arquivo JSON comprimido, em
+`data/cache/<aa>/<sha256>.json.gz`. O cliente também consegue ler o formato JSON
+não comprimido usado anteriormente.
 
-O coletor de workflow runs (`pipeline/workflow_runs.py`) consulta a janela inteira de uma vez
-quando ela tem menos de 1.000 runs (push no default branch); senão, um mês por vez, e avisa,
-no log, se algum mês atingir o teto de 1.000 resultados da API. Ele exporta `data/processed/runs.csv` (`full_name`, `id`,
-`workflow_id`, `event`, `head_branch`, `conclusion`, `classe`, `created_at`,
-`run_started_at`, `updated_at`), em que `classe` é `sucesso`, `falha` ou `ignorado`.
+### Seleção e dados coletados
 
-Os coletores de releases e commits exportam `data/processed/releases.csv`
-(`full_name`, `tag_name`, `published_at`, `draft`, `prerelease`),
-`data/processed/tags.csv` (`full_name`, `tag_name`, `commit_sha`, `commit_date`)
-e `data/processed/commits.csv` (`full_name`, `tag_name`, `sha`,
-`author_date`, `message`). As datas são gravadas em ISO 8601 UTC. Releases
-anteriores à janela são preservadas para servir de base ao cálculo de lead time.
-As datas das tags vêm da API GraphQL (1 ponto por 100 tags, em vez de uma chamada REST
-por tag). Releases da janela cujo `compare` não pôde ser calculado (primeira release da
-história, 404 de tag apagada/reescrita, 422 ou 5xx persistente) ficam em
-`data/processed/releases_sem_compare.csv` (`full_name`, `tag_name`, `motivo`), e os meses
-de runs que bateram o teto de 1.000 resultados, em `data/processed/runs_meses_saturados.csv`.
+| Arquivo | Como interpretar |
+|---|---|
+| `output/candidatos.csv` | Repositórios encontrados na busca inicial |
+| `output/funil.csv` | Etapas da seleção, com contagens de permanência, descarte e motivos |
+| `output/repos.csv` | Amostra selecionada e seus metadados, como estrelas, linguagem, idade e contribuidores |
+| `data/processed/releases.csv` | Releases coletadas, com tag, data de publicação e indicação de draft e pré-release |
+| `data/processed/tags.csv` | Tags, commits apontados por elas e datas de autoria desses commits |
+| `data/processed/commits.csv` | Commits associados a cada release, com SHA, data de autoria e mensagem |
+| `data/processed/runs.csv` | Execuções de workflows, com conclusão, datas e classe: `sucesso`, `falha` ou `ignorado` |
+| `data/processed/releases_sem_compare.csv` | Releases sem comparação calculável com a anterior e o motivo da ausência |
+| `data/processed/runs_meses_saturados.csv` | Repositórios e meses em que a consulta atingiu o teto de 1.000 execuções |
 
-## Amostra-ouro (validação manual)
+As datas são salvas em ISO 8601 com fuso UTC. Os nomes `full_name` e `tag_name`
+identificam, respectivamente, o repositório (`dono/nome`) e a tag de uma release.
 
-Depois do pipeline (que gera `output/repos.csv`), as planilhas de rotulagem da seção 6 do
-enunciado são geradas com:
+Para obter os commits de uma release, o coletor compara sua tag com a da release
+principal publicada imediatamente antes. Essa antecessora pode estar fora da
+janela, por isso o histórico de releases anteriores também é preservado. A
+primeira release da história não tem antecessora; comparações também podem falhar
+por tags apagadas ou reescritas, respostas 422 ou erros persistentes do servidor.
+Esses casos ficam registrados em `releases_sem_compare.csv` e fora do lead time.
+
+As execuções consideradas nas métricas são as disparadas por `push` no default
+branch. `success` indica sucesso; `failure`, `timed_out` e `startup_failure` indicam
+falha. As demais conclusões são ignoradas nos cálculos. Quando a consulta da janela
+inteira tem 1.000 execuções ou mais, o coletor divide a busca por mês. Se um mês
+também atingir o teto da API, ele é registrado em `runs_meses_saturados.csv`; isso
+indica uma possível coleta incompleta naquele período.
+
+## Calcular as métricas
+
+As funções em `metricas/` recebem dados já coletados e calculam os resultados sem
+acessar rede ou disco. Essa separação permite testar os cálculos com exemplos
+pequenos, cujo resultado pode ser conferido à mão.
+
+| Métrica | O que o cálculo representa |
+|---|---|
+| Frequência de entrega | Quantidade de releases publicadas dividida pelas semanas da janela |
+| Lead time por release | Mediana do intervalo entre o commit mais antigo de cada release e sua publicação |
+| Lead time por commit | Mediana dos intervalos entre cada commit e a publicação da release que o inclui |
+| CFR de CI | Proporção de execuções com falha entre as execuções com sucesso ou falha |
+| CFR de entrega | Proporção de releases avaliadas seguidas de uma corretiva em até sete dias |
+| Tempo de recuperação | Mediana da duração dos episódios de falha, calculados dentro de cada workflow |
+
+Uma release só entra na definição principal de entrega se estiver publicada,
+sem ser draft ou pré-release. O lead time e o tempo de recuperação são expressos
+em horas; a frequência, em releases por semana; e o CFR, como fração de 0 a 1.
+
+### CFR de entrega e censura
+
+O CFR de entrega procura sinais de correção depois de cada release. Uma release
+é considerada falha se houver uma corretiva publicada depois dela em até sete
+dias, inclusive. Uma publicação intermediária não encerra essa busca, e cada
+release avaliada conta no máximo uma falha.
+
+As releases dos últimos sete dias da janela ainda não tiveram o período completo
+de observação. Por isso, são **censuradas**: ficam contabilizadas separadamente e
+fora do denominador, mesmo que uma correção já tenha sido observada. Isso evita
+comparar releases com tempos de acompanhamento diferentes.
+
+Por exemplo, se houver 10 releases, 2 censuradas e 2 falhas entre as 8 avaliáveis,
+o CFR será `2 / 8 = 0,25`, ou **25%**. Sem releases avaliáveis, o resultado é `None`,
+pois não há dados suficientes para calcular a taxa. Com releases avaliáveis e
+nenhuma falha, o resultado é `0.0`.
+
+A função `metricas.cfr.cfr_entrega(releases, commits_por_release, fim_janela)`
+retorna os seguintes campos:
+
+| Campo | Significado |
+|---|---|
+| `cfr` | Fração de releases avaliadas consideradas falhas, ou `None` |
+| `n_avaliadas` | Quantidade de releases com período completo de observação |
+| `n_falharam` | Quantidade de releases avaliadas seguidas de corretiva no prazo |
+| `n_censuradas` | Quantidade de releases publicadas nos últimos sete dias |
+
+Ao chamar a função, forneça releases já restritas ao início da janela e commits
+agrupados por tag, conforme os contratos das diretrizes. As datas devem ter fuso
+UTC. Use `config.janela.fim` como limite final: o carregador de configuração
+converte o último dia inclusivo para o início do dia seguinte, exclusivo. Drafts,
+pré-releases, registros sem data e publicações nesse limite ou depois dele são
+ignorados.
+
+A identificação automática de releases corretivas precisa ser avaliada contra o
+consenso humano descrito a seguir. Até os três avaliadores concluírem a rotulagem,
+eles não devem consultar o código nem os resultados dessa identificação.
+
+## Validar os dados com a amostra-ouro
+
+A amostra-ouro é um subconjunto avaliado pelos três integrantes de forma
+independente. Ela permite verificar se as releases representam entregas reais e
+comparar a identificação automática de correções com o julgamento humano.
+
+### Sortear os itens e gerar as planilhas
+
+Faça o sorteio depois de concluir a coleta da amostra final de pelo menos 300
+repositórios. O comando lê `output/repos.csv`, seleciona os repositórios e gera
+planilhas vazias para cada avaliador:
 
 ```bash
 python -m pipeline.amostra_ouro --config config.yaml
 ```
 
-O comando sorteia `amostra_ouro.tamanho` (60) repositórios da amostra final com
-`df.sort_values("full_name").sample(n=60, random_state=42)` e, de cada um,
-`amostra_ouro.releases_por_repo` (5) releases entre as publicadas na janela (não draft, não
-pré-release), com `random.Random("42:<full_name>")`. A semente e os tamanhos ficam em
-`config.yaml → amostra_ouro`; mesma semente e mesmo `repos.csv` = mesmo sorteio. As releases vêm
-do cache em `data/cache` (cerca de uma chamada por repositório sorteado na primeira vez). Saídas em
-`output/amostra_ouro/`:
+O tamanho do sorteio e a semente ficam em `config.yaml`, na seção `amostra_ouro`.
+O padrão é **60 repositórios e 5 releases por repositório**, totalizando 300
+releases. Com a mesma amostra e semente, o sorteio é o mesmo: os repositórios são
+ordenados por nome antes da seleção, e cada um usa uma semente própria para
+sortear suas releases. As releases são obtidas pelo cliente da API, aproveitando
+as respostas já disponíveis no cache.
+
+Todos os arquivos dessa etapa ficam em `output/amostra_ouro/`:
 
 | Arquivo | Conteúdo |
 |---|---|
-| `sorteio_repos.csv` | `full_name`, `url_repo`, `url_releases`, `linguagem` dos sorteados, na ordem do sorteio |
-| `sorteio_releases.csv` | `full_name`, `tag_name`, `published_at`, `url_release` (página da release), `tag_anterior` (release publicada imediatamente antes, a mesma do lead time) e `url_compare` (commits desde ela; vazio se for a primeira) |
-| `rotulos_<A\|B\|C>_repos.csv` | um por avaliador: colunas do sorteio + `tipo_projeto`, `entregas_reais`, `observacoes` (vazias) |
-| `rotulos_<A\|B\|C>_releases.csv` | um por avaliador: colunas do sorteio + `corretiva`, `observacoes` (vazias) |
-| `LEIAME.md` | instruções de rotulagem e valores válidos |
+| `sorteio_repos.csv` | Repositórios sorteados e links para suas páginas e releases |
+| `sorteio_releases.csv` | Releases sorteadas, datas, links e comparação com a release anterior |
+| `rotulos_A_repos.csv`, `rotulos_B_repos.csv`, `rotulos_C_repos.csv` | Uma planilha por avaliador para classificar os repositórios |
+| `rotulos_A_releases.csv`, `rotulos_B_releases.csv`, `rotulos_C_releases.csv` | Uma planilha por avaliador para classificar as releases |
+| `LEIAME.md` | Instruções para preencher as planilhas |
 
-Valores válidos: `tipo_projeto` ∈ {`biblioteca/framework`, `aplicação/serviço`, `ferramenta CLI`,
-`outro`}; `entregas_reais` ∈ {`sim`, `não`, `incerto`}; `corretiva` ∈ {`sim`, `não`}. Cada
-avaliador preenche só a própria planilha, **sem consultar os demais e sem ver a saída da
-heurística de release corretiva** (as planilhas não a trazem). As planilhas são CSV UTF-8 (com
-BOM, para o Excel) separado por vírgulas.
+Se um repositório tiver menos releases elegíveis que o solicitado, todas serão
+incluídas e o comando emitirá um aviso. O total de releases sorteadas poderá,
+nesse caso, ser menor que o planejado.
 
-Se alguma planilha `rotulos_*.csv` já tiver um rótulo ou observação preenchido, o comando recusa
-sobrescrevê-la (código de saída 1, antes de qualquer chamada à API). `--forcar` regrava tudo e
-**descarta os rótulos**.
+### Preencher os rótulos de forma independente
 
-### Concordância e consenso
+Cada avaliador abre somente suas duas planilhas e consulta os links dos projetos,
+as release notes e os commits. Os campos aceitam os seguintes valores:
 
-Com as seis planilhas preenchidas, a concordância (kappa de Fleiss) e o consenso são gerados com:
+| Campo | O que avaliar | Valores permitidos |
+|---|---|---|
+| `tipo_projeto` | Natureza principal do repositório | `biblioteca/framework`, `aplicação/serviço`, `ferramenta CLI`, `outro` |
+| `entregas_reais` | Se as releases representam entregas ao usuário | `sim`, `não`, `incerto` |
+| `corretiva` | Se o objetivo principal da release é corrigir um defeito recente | `sim`, `não` |
+| `observacoes` | Dúvidas ou justificativas que ajudem na discussão posterior | Texto livre, opcional |
+
+Os rótulos devem ser preenchidos por cada pessoa sem consultar os colegas, suas
+planilhas ou a heurística automática. Em monorepos, a release anterior pode
+pertencer a outro pacote; nesse caso, a comparação pode misturar mudanças, e as
+release notes ajudam a interpretar a entrega.
+
+Salve as planilhas como **CSV UTF-8**. Elas são geradas com vírgulas e BOM para
+facilitar a abertura no Excel; o consenso também aceita arquivos separados por
+ponto e vírgula.
+
+Se já houver qualquer rótulo ou observação preenchido, o comando de sorteio
+recusa sobrescrever as planilhas e retorna código 1 antes de consultar a API.
+A opção `--forcar` descarta os rótulos existentes e só deve ser usada quando houver
+uma decisão explícita de refazer o sorteio.
+
+### Calcular a concordância e consolidar o consenso
+
+Com as seis planilhas preenchidas, execute:
 
 ```bash
 python -m pipeline.consenso --config config.yaml
 ```
 
-O comando não acessa a rede. Ele valida as planilhas (arquivo ausente, item faltando, sobrando ou
-repetido, rótulo vazio ou fora dos valores válidos) e, se houver qualquer problema, lista todos e
-não grava nada. Maiúsculas e espaços nas pontas são tolerados, e planilhas salvas pelo Excel com
-`;` são aceitas, desde que em **CSV UTF-8**. Saídas em `output/amostra_ouro/`:
+Esse comando trabalha apenas com os arquivos locais. Primeiro, verifica se há
+arquivos ausentes, itens faltando, extras ou repetidos, além de rótulos vazios ou
+inválidos. Se encontrar erros, lista os problemas e não grava resultados.
+Maiúsculas e espaços nas pontas dos valores são tolerados.
+
+Depois da validação, calcula o **kappa de Fleiss** para cada dimensão avaliada.
+Essa medida considera a concordância que poderia ocorrer por acaso, ajudando a
+interpretar o quanto os avaliadores concordaram. Se todos os rótulos de uma
+dimensão estiverem na mesma categoria, o kappa fica indefinido e é salvo vazio.
+
+O consenso segue uma regra comum: três rótulos iguais produzem unanimidade; dois
+iguais definem a maioria; três diferentes exigem reunião do grupo. Os casos de
+reunião ficam em `desempates.csv`, onde devem ser preenchidos `rotulo_final` e
+`justificativa`. Depois, execute novamente o comando para aplicar essas decisões.
+As decisões já preenchidas são preservadas nas próximas execuções.
+
+As saídas ficam na mesma pasta das planilhas:
 
 | Arquivo | Conteúdo |
 |---|---|
-| `concordancia.csv` | por dimensão (`tipo_projeto`, `entregas_reais`, `corretiva`): `n_itens`, `n_avaliadores`, `concordancia_observada` (fração de itens com os 3 iguais), `kappa_fleiss` (vazio quando indefinido: todos os rótulos numa só categoria) e `interpretacao` (Landis & Koch) |
-| `divergencias.csv` | itens sem unanimidade, com os 3 rótulos e o tipo (`2x1` ou `1-1-1`) |
-| `desempates.csv` | casos `1-1-1`, a decidir em reunião: preencher `rotulo_final` e `justificativa` |
-| `consenso_repos.csv` | `tipo_projeto` e `entregas_reais` de consenso, cada um com a origem |
-| `consenso_releases.csv` | `corretiva` de consenso e origem |
+| `concordancia.csv` | Quantidade de itens e avaliadores, fração de unanimidade, kappa e interpretação por dimensão |
+| `divergencias.csv` | Itens em que os avaliadores discordaram, seus rótulos e tipo de divergência |
+| `desempates.csv` | Decisões e justificativas dos casos com três rótulos diferentes |
+| `consenso_repos.csv` | Classificação final dos repositórios e origem de cada decisão |
+| `consenso_releases.csv` | Classificação final das releases como corretivas ou não, com a origem da decisão |
 
-**Protocolo de desempate:** 3 rótulos iguais → consenso direto (`unanime`); 2 iguais × 1 diferente
-→ maioria simples (`maioria`); 3 diferentes (`1-1-1`, só possível em `tipo_projeto` e
-`entregas_reais`) → decidido em reunião do grupo e registrado em `desempates.csv` (`reuniao`).
-Rodar de novo preserva as decisões já preenchidas; um caso decidido que deixou de ser `1-1-1`
-continua no arquivo (com aviso no log), mas não é aplicado.
+O código de saída informa o resultado da execução:
 
-Códigos de saída: `0` consenso completo; `1` erro nas planilhas ou em `desempates.csv` (nada é
-gravado); `2` configuração inválida; `3` arquivos gerados, mas há casos `1-1-1` sem decisão.
+| Código | Significado |
+|---|---|
+| `0` | Consenso completo |
+| `1` | Erro nas planilhas ou nos desempates; nenhum resultado foi gravado |
+| `2` | Configuração inválida |
+| `3` | Arquivos gerados, mas ainda existem casos sem decisão do grupo |
 
-## Testes
+## Executar os testes
+
+Com o ambiente virtual ativo, execute:
 
 ```bash
 pytest --cov=metricas --cov-report=term-missing --cov-fail-under=80
 ```
 
-Os testes também rodam no GitHub Actions a cada push (`.github/workflows/testes.yml`).
+Os testes verificam os cálculos com dados sintéticos e a coleta com respostas
+simuladas, sem fazer consultas reais ao GitHub. O comando também mede a cobertura
+de `metricas/` e falha se ela ficar abaixo de 80%. Os mesmos testes são executados
+no GitHub Actions a cada push e pull request, conforme
+[.github/workflows/testes.yml](./.github/workflows/testes.yml).

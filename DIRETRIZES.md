@@ -49,6 +49,18 @@
 
 A janela vive **apenas em `config.yaml`** — nunca hard-coded.
 
+**Decisões operacionais da #28:** como o enunciado não exige sucessão imediata,
+adotamos qualquer corretiva com publicação estritamente posterior e distância ≤ 7 dias;
+uma release intermediária não encerra a busca. Cada release avaliada conta no máximo uma
+falha. A antecessora usada para classificar cada candidata é a principal imediatamente
+anterior por `(published_at, tag_name)`. O intervalo dos últimos 7 dias começa em
+`fim_janela - 7 dias`, inclusive (fim exclusivo); todas as releases nele são censuradas,
+mesmo se já houver correção observada. Essas convenções têm testes e não atribuem uma
+correção específica a um defeito. Monorepos continuam seguindo a cronologia global, sem
+inferir pacotes; essa limitação deve ser discutida na validação. Os detalhes da heurística
+ficam nas docstrings de `metricas/cfr.py` e só devem ser consultados pelos avaliadores
+após concluírem a rotulagem independente.
+
 ---
 
 ## 2. Stack e ambiente
@@ -182,13 +194,17 @@ def lead_time_por_commit(commits_por_release: dict[str, list[Commit]], releases:
 # metricas/cfr.py [C]
 def cfr_ci(runs: list[Run]) -> float | None
 
-# metricas/cfr.py [B, S02, #28]: PROPOSTA. B confirma ou ajusta e atualiza aqui antes do PR
+# metricas/cfr.py [B, S02, #28]
 def release_corretiva(release: Release, anterior: Release | None, commits: list[Commit]) -> bool
     # heurística da release corretiva; usada pelo CFR (b) e comparada ao consenso na #34 (P/R/F1)
 def cfr_entrega(releases: list[Release], commits_por_release: dict[str, list[Commit]],
                 fim_janela: datetime) -> dict
     # {cfr (fração 0–1 | None), n_avaliadas, n_falharam, n_censuradas}; R falhou se seguida em ≤ 7 dias
     # por release corretiva; releases dos últimos 7 dias da janela = censuradas (fora do denominador)
+    # Entrada já restrita ao início da janela; fim_janela exclusivo. Filtra drafts, pré-releases,
+    # datas ausentes e publicações >= fim. Ordena por (published_at, tag_name), sem mutar a entrada.
+    # n_avaliadas + n_censuradas = nº de releases principais publicadas recebidas antes de fim.
+    # Nenhuma avaliável => cfr = None; avaliáveis sem falha => cfr = 0.0.
 
 # metricas/recuperacao.py [C]
 def episodios_recuperacao(runs: list[Run], fim_janela: datetime) -> list[dict]  # {inicio, fim, horas, censurado}
