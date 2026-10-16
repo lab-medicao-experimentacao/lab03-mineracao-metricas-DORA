@@ -1,61 +1,61 @@
 ﻿full_name,url_repo,url_releases,linguagem,tipo_projeto,entregas_reais,observacoes
-nginx/nginx,https://github.com/nginx/nginx,https://github.com/nginx/nginx/releases,C,,,
-thunderbird/thunderbolt,https://github.com/thunderbird/thunderbolt,https://github.com/thunderbird/thunderbolt/releases,TypeScript,,,
-keldaanCommunity/pokemonAutoChess,https://github.com/keldaanCommunity/pokemonAutoChess,https://github.com/keldaanCommunity/pokemonAutoChess/releases,TypeScript,,,
-BradyAJohnston/MolecularNodes,https://github.com/BradyAJohnston/MolecularNodes,https://github.com/BradyAJohnston/MolecularNodes/releases,Python,,,
-runatlantis/atlantis,https://github.com/runatlantis/atlantis,https://github.com/runatlantis/atlantis/releases,Go,,,
-rancher/rke2,https://github.com/rancher/rke2,https://github.com/rancher/rke2/releases,Go,,,
-mosaico-labs/mosaico,https://github.com/mosaico-labs/mosaico,https://github.com/mosaico-labs/mosaico/releases,Python,,,
-failsafe-go/failsafe-go,https://github.com/failsafe-go/failsafe-go,https://github.com/failsafe-go/failsafe-go/releases,Go,,,
-AzureAD/microsoft-authentication-library-for-js,https://github.com/AzureAD/microsoft-authentication-library-for-js,https://github.com/AzureAD/microsoft-authentication-library-for-js/releases,TypeScript,,,
-marcoroth/herb,https://github.com/marcoroth/herb,https://github.com/marcoroth/herb/releases,TypeScript,,,
-salesforce/lwc,https://github.com/salesforce/lwc,https://github.com/salesforce/lwc/releases,JavaScript,,,
-anthropics/claude-agent-sdk-python,https://github.com/anthropics/claude-agent-sdk-python,https://github.com/anthropics/claude-agent-sdk-python/releases,Python,,,
-pion/turn,https://github.com/pion/turn,https://github.com/pion/turn/releases,Go,,,
-UglyToad/PdfPig,https://github.com/UglyToad/PdfPig,https://github.com/UglyToad/PdfPig/releases,C#,,,
-melandlabs/openloomi,https://github.com/melandlabs/openloomi,https://github.com/melandlabs/openloomi/releases,TypeScript,,,
-puemos/hls-downloader,https://github.com/puemos/hls-downloader,https://github.com/puemos/hls-downloader/releases,TypeScript,,,
-withcatai/node-llama-cpp,https://github.com/withcatai/node-llama-cpp,https://github.com/withcatai/node-llama-cpp/releases,TypeScript,,,
-open-telemetry/opentelemetry-go,https://github.com/open-telemetry/opentelemetry-go,https://github.com/open-telemetry/opentelemetry-go/releases,Go,,,
-jlblancoc/nanoflann,https://github.com/jlblancoc/nanoflann,https://github.com/jlblancoc/nanoflann/releases,C++,,,
-libp2p/go-libp2p,https://github.com/libp2p/go-libp2p,https://github.com/libp2p/go-libp2p/releases,Go,,,
-bpmn-io/bpmn-js,https://github.com/bpmn-io/bpmn-js,https://github.com/bpmn-io/bpmn-js/releases,JavaScript,,,
-fjall-rs/fjall,https://github.com/fjall-rs/fjall,https://github.com/fjall-rs/fjall/releases,Rust,,,
-spring-projects/spring-session,https://github.com/spring-projects/spring-session,https://github.com/spring-projects/spring-session/releases,Java,,,
-squid-cache/squid,https://github.com/squid-cache/squid,https://github.com/squid-cache/squid/releases,C++,,,
-eigent-ai/eigent,https://github.com/eigent-ai/eigent,https://github.com/eigent-ai/eigent/releases,TypeScript,,,
-T8RIN/ImageToolbox,https://github.com/T8RIN/ImageToolbox,https://github.com/T8RIN/ImageToolbox/releases,Kotlin,,,
-vanilla-extract-css/vanilla-extract,https://github.com/vanilla-extract-css/vanilla-extract,https://github.com/vanilla-extract-css/vanilla-extract/releases,TypeScript,,,
-yzhao062/pyod,https://github.com/yzhao062/pyod,https://github.com/yzhao062/pyod/releases,Python,,,
-kyverno/kyverno,https://github.com/kyverno/kyverno,https://github.com/kyverno/kyverno/releases,Go,,,
-scala/scala3,https://github.com/scala/scala3,https://github.com/scala/scala3/releases,Scala,,,
-ExpressLRS/ExpressLRS,https://github.com/ExpressLRS/ExpressLRS,https://github.com/ExpressLRS/ExpressLRS/releases,C,,,
-less/less.js,https://github.com/less/less.js,https://github.com/less/less.js/releases,JavaScript,,,
-Netflix/hollow,https://github.com/Netflix/hollow,https://github.com/Netflix/hollow/releases,Java,,,
-JustArchiNET/ArchiSteamFarm,https://github.com/JustArchiNET/ArchiSteamFarm,https://github.com/JustArchiNET/ArchiSteamFarm/releases,C#,,,
-panva/jose,https://github.com/panva/jose,https://github.com/panva/jose/releases,TypeScript,,,
-getkin/kin-openapi,https://github.com/getkin/kin-openapi,https://github.com/getkin/kin-openapi/releases,Go,,,
-BishopFox/sliver,https://github.com/BishopFox/sliver,https://github.com/BishopFox/sliver/releases,Go,,,
-davidmonterocrespo24/velxio,https://github.com/davidmonterocrespo24/velxio,https://github.com/davidmonterocrespo24/velxio/releases,TypeScript,,,
-WordPress/gutenberg,https://github.com/WordPress/gutenberg,https://github.com/WordPress/gutenberg/releases,JavaScript,,,
-binwiederhier/ntfy,https://github.com/binwiederhier/ntfy,https://github.com/binwiederhier/ntfy/releases,Go,,,
-diffplug/spotless,https://github.com/diffplug/spotless,https://github.com/diffplug/spotless/releases,Java,,,
-bobthecow/psysh,https://github.com/bobthecow/psysh,https://github.com/bobthecow/psysh/releases,PHP,,,
-web-infra-dev/rspress,https://github.com/web-infra-dev/rspress,https://github.com/web-infra-dev/rspress/releases,TypeScript,,,
-apache/superset,https://github.com/apache/superset,https://github.com/apache/superset/releases,Python,,,
-boxdot/gurk-rs,https://github.com/boxdot/gurk-rs,https://github.com/boxdot/gurk-rs/releases,Rust,,,
-argotorg/fe,https://github.com/argotorg/fe,https://github.com/argotorg/fe/releases,Rust,,,
-s3ql/s3ql,https://github.com/s3ql/s3ql,https://github.com/s3ql/s3ql/releases,Python,,,
-remorses/gpuix,https://github.com/remorses/gpuix,https://github.com/remorses/gpuix/releases,Rust,,,
-fastfetch-cli/fastfetch,https://github.com/fastfetch-cli/fastfetch,https://github.com/fastfetch-cli/fastfetch/releases,C,,,
-roots/bedrock,https://github.com/roots/bedrock,https://github.com/roots/bedrock/releases,PHP,,,
-mavlink/mavros,https://github.com/mavlink/mavros,https://github.com/mavlink/mavros/releases,C++,,,
-jasonwong1991/easy_proxies,https://github.com/jasonwong1991/easy_proxies,https://github.com/jasonwong1991/easy_proxies/releases,Go,,,
-scalameta/metals,https://github.com/scalameta/metals,https://github.com/scalameta/metals/releases,Scala,,,
-bluesky-social/atproto,https://github.com/bluesky-social/atproto,https://github.com/bluesky-social/atproto/releases,TypeScript,,,
-zard-ui/zardui,https://github.com/zard-ui/zardui,https://github.com/zard-ui/zardui/releases,TypeScript,,,
-umami-software/umami,https://github.com/umami-software/umami,https://github.com/umami-software/umami/releases,TypeScript,,,
-docker/buildx,https://github.com/docker/buildx,https://github.com/docker/buildx/releases,Go,,,
-dermotduffy/advanced-camera-card,https://github.com/dermotduffy/advanced-camera-card,https://github.com/dermotduffy/advanced-camera-card/releases,TypeScript,,,
-mljar/mercury,https://github.com/mljar/mercury,https://github.com/mljar/mercury/releases,Python,,,
-JustinBeckwith/linkinator,https://github.com/JustinBeckwith/linkinator,https://github.com/JustinBeckwith/linkinator/releases,TypeScript,,,
+nginx/nginx,https://github.com/nginx/nginx,https://github.com/nginx/nginx/releases,C,aplicação/serviço,sim,Servidor HTTP e proxy distribuído para instalação.
+thunderbird/thunderbolt,https://github.com/thunderbird/thunderbolt,https://github.com/thunderbird/thunderbolt/releases,TypeScript,aplicação/serviço,sim,Cliente de IA com instaladores desktop e builds móveis.
+keldaanCommunity/pokemonAutoChess,https://github.com/keldaanCommunity/pokemonAutoChess,https://github.com/keldaanCommunity/pokemonAutoChess/releases,TypeScript,aplicação/serviço,sim,Jogo online; versões entregam conteúdo e ajustes aos jogadores.
+BradyAJohnston/MolecularNodes,https://github.com/BradyAJohnston/MolecularNodes,https://github.com/BradyAJohnston/MolecularNodes/releases,Python,outro,sim,Extensão do Blender com API Python; R3 atualiza compatibilidade.
+runatlantis/atlantis,https://github.com/runatlantis/atlantis,https://github.com/runatlantis/atlantis/releases,Go,aplicação/serviço,sim,Serviço de automação Terraform/OpenTofu em pull requests.
+rancher/rke2,https://github.com/rancher/rke2,https://github.com/rancher/rke2/releases,Go,aplicação/serviço,sim,Kubernetes instalável; atualizações amplas misturam recursos e reparos.
+mosaico-labs/mosaico,https://github.com/mosaico-labs/mosaico,https://github.com/mosaico-labs/mosaico/releases,Python,aplicação/serviço,sim,Servidor e SDK de dados de sensores; imagens e pacotes instaláveis.
+failsafe-go/failsafe-go,https://github.com/failsafe-go/failsafe-go,https://github.com/failsafe-go/failsafe-go/releases,Go,biblioteca/framework,sim,"Biblioteca Go de resiliência, com versões para uso em aplicações."
+AzureAD/microsoft-authentication-library-for-js,https://github.com/AzureAD/microsoft-authentication-library-for-js,https://github.com/AzureAD/microsoft-authentication-library-for-js/releases,TypeScript,biblioteca/framework,sim,Pacotes JS de autenticação; R2 só atualiza dependências.
+marcoroth/herb,https://github.com/marcoroth/herb,https://github.com/marcoroth/herb/releases,TypeScript,biblioteca/framework,sim,Parser/engine ERB com ferramentas; R5 corrige arquivos do pacote.
+salesforce/lwc,https://github.com/salesforce/lwc,https://github.com/salesforce/lwc/releases,JavaScript,biblioteca/framework,sim,"Engine e compilador de componentes web, distribuídos em pacotes."
+anthropics/claude-agent-sdk-python,https://github.com/anthropics/claude-agent-sdk-python,https://github.com/anthropics/claude-agent-sdk-python/releases,Python,biblioteca/framework,sim,"SDK Python; R2, R3 e R5 apenas atualizam a CLI empacotada."
+pion/turn,https://github.com/pion/turn,https://github.com/pion/turn/releases,Go,biblioteca/framework,sim,Toolkit Go embutível de clientes e servidores TURN.
+UglyToad/PdfPig,https://github.com/UglyToad/PdfPig,https://github.com/UglyToad/PdfPig/releases,C#,biblioteca/framework,sim,Biblioteca .NET de PDFs; correções e novos recursos variam por versão.
+melandlabs/openloomi,https://github.com/melandlabs/openloomi,https://github.com/melandlabs/openloomi/releases,TypeScript,aplicação/serviço,sim,"Assistente desktop; R3 tem notas mínimas, mas commits majoritariamente corretivos."
+puemos/hls-downloader,https://github.com/puemos/hls-downloader,https://github.com/puemos/hls-downloader/releases,TypeScript,outro,sim,Extensão de navegador; R4 e R5 só ajustam publicação Firefox.
+withcatai/node-llama-cpp,https://github.com/withcatai/node-llama-cpp,https://github.com/withcatai/node-llama-cpp/releases,TypeScript,biblioteca/framework,sim,Bindings Node.js de modelos locais; CLI é complementar.
+open-telemetry/opentelemetry-go,https://github.com/open-telemetry/opentelemetry-go,https://github.com/open-telemetry/opentelemetry-go/releases,Go,biblioteca/framework,sim,SDK Go de telemetria; R3 corrige conformidade W3C Baggage.
+jlblancoc/nanoflann,https://github.com/jlblancoc/nanoflann,https://github.com/jlblancoc/nanoflann/releases,C++,biblioteca/framework,sim,Biblioteca C++ de árvores KD; R4 renomeia o pacote ROS.
+libp2p/go-libp2p,https://github.com/libp2p/go-libp2p,https://github.com/libp2p/go-libp2p/releases,Go,biblioteca/framework,sim,Stack P2P Go; versões misturam APIs novas e correções de rede.
+bpmn-io/bpmn-js,https://github.com/bpmn-io/bpmn-js,https://github.com/bpmn-io/bpmn-js/releases,JavaScript,biblioteca/framework,sim,Biblioteca de diagramas BPMN; R2 só atualiza diagram-js.
+fjall-rs/fjall,https://github.com/fjall-rs/fjall,https://github.com/fjall-rs/fjall/releases,Rust,biblioteca/framework,sim,Engine Rust embutível; R4 só informa atualização de dependência.
+spring-projects/spring-session,https://github.com/spring-projects/spring-session,https://github.com/spring-projects/spring-session/releases,Java,biblioteca/framework,sim,Biblioteca de sessões; várias releases só atualizam dependências.
+squid-cache/squid,https://github.com/squid-cache/squid,https://github.com/squid-cache/squid/releases,C++,aplicação/serviço,sim,Proxy/cache HTTP; versões sorteadas predominam em reparos.
+eigent-ai/eigent,https://github.com/eigent-ai/eigent,https://github.com/eigent-ai/eigent/releases,TypeScript,aplicação/serviço,sim,Aplicativo desktop de agentes; algumas releases não têm notas.
+T8RIN/ImageToolbox,https://github.com/T8RIN/ImageToolbox,https://github.com/T8RIN/ImageToolbox/releases,Kotlin,aplicação/serviço,sim,"Aplicativo Android; R1 tem notas cumulativas, mas comparação corretiva."
+vanilla-extract-css/vanilla-extract,https://github.com/vanilla-extract-css/vanilla-extract,https://github.com/vanilla-extract-css/vanilla-extract/releases,TypeScript,biblioteca/framework,sim,Pacotes CSS e plugins; R4 só informa atualização de dependência.
+yzhao062/pyod,https://github.com/yzhao062/pyod,https://github.com/yzhao062/pyod/releases,Python,biblioteca/framework,sim,Biblioteca Python de anomalias; inclui SDK e ferramentas de agentes.
+kyverno/kyverno,https://github.com/kyverno/kyverno,https://github.com/kyverno/kyverno/releases,Go,aplicação/serviço,sim,"Controladores Kubernetes de políticas, com imagens e charts."
+scala/scala3,https://github.com/scala/scala3,https://github.com/scala/scala3/releases,Scala,outro,sim,"Linguagem, compilador e biblioteca padrão; classificado como outro."
+ExpressLRS/ExpressLRS,https://github.com/ExpressLRS/ExpressLRS,https://github.com/ExpressLRS/ExpressLRS/releases,C,outro,sim,Firmware de rádio controle instalado em transmissores/receptores.
+less/less.js,https://github.com/less/less.js,https://github.com/less/less.js/releases,JavaScript,biblioteca/framework,sim,Preprocessador CSS via npm; R1 e R4 mudam apenas testes/CI.
+Netflix/hollow,https://github.com/Netflix/hollow,https://github.com/Netflix/hollow/releases,Java,biblioteca/framework,sim,Biblioteca Java de datasets; R4 corrige ordenação da interface.
+JustArchiNET/ArchiSteamFarm,https://github.com/JustArchiNET/ArchiSteamFarm,https://github.com/JustArchiNET/ArchiSteamFarm/releases,C#,aplicação/serviço,sim,Automação Steam; entrega aplicação executável e interface IPC.
+panva/jose,https://github.com/panva/jose,https://github.com/panva/jose/releases,TypeScript,biblioteca/framework,sim,Módulo JS de JWT e criptografia para outros programas.
+getkin/kin-openapi,https://github.com/getkin/kin-openapi,https://github.com/getkin/kin-openapi/releases,Go,biblioteca/framework,sim,Biblioteca Go OpenAPI; R5 inclui reparo de DoS na comparação.
+BishopFox/sliver,https://github.com/BishopFox/sliver,https://github.com/BishopFox/sliver/releases,Go,ferramenta CLI,sim,Console de testes de segurança com cliente e servidor C2.
+davidmonterocrespo24/velxio,https://github.com/davidmonterocrespo24/velxio,https://github.com/davidmonterocrespo24/velxio/releases,TypeScript,aplicação/serviço,sim,Simulador web; R1 é runtime QEMU com distribuição alterada.
+WordPress/gutenberg,https://github.com/WordPress/gutenberg,https://github.com/WordPress/gutenberg/releases,JavaScript,outro,sim,Editor/plugin WordPress; não é aplicação independente.
+binwiederhier/ntfy,https://github.com/binwiederhier/ntfy,https://github.com/binwiederhier/ntfy/releases,Go,aplicação/serviço,sim,Serviço de notificações HTTP auto-hospedável.
+diffplug/spotless,https://github.com/diffplug/spotless,https://github.com/diffplug/spotless/releases,Java,outro,sim,"Plugins de build Gradle/Maven, com biblioteca auxiliar."
+bobthecow/psysh,https://github.com/bobthecow/psysh,https://github.com/bobthecow/psysh/releases,PHP,ferramenta CLI,sim,Console interativo e debugger PHP para terminal.
+web-infra-dev/rspress,https://github.com/web-infra-dev/rspress,https://github.com/web-infra-dev/rspress/releases,TypeScript,ferramenta CLI,sim,Gerador de sites de documentação via comandos de build/dev.
+apache/superset,https://github.com/apache/superset,https://github.com/apache/superset/releases,Python,aplicação/serviço,sim,Aplicação web de BI; releases sorteadas são do chart Helm.
+boxdot/gurk-rs,https://github.com/boxdot/gurk-rs,https://github.com/boxdot/gurk-rs/releases,Rust,ferramenta CLI,sim,"Cliente Signal para terminal, com binários instaláveis."
+argotorg/fe,https://github.com/argotorg/fe,https://github.com/argotorg/fe/releases,Rust,outro,sim,Linguagem/toolchain Fe; versões experimentais utilizáveis para testes.
+s3ql/s3ql,https://github.com/s3ql/s3ql,https://github.com/s3ql/s3ql/releases,Python,outro,sim,Filesystem FUSE e ferramentas; instalação entrega armazenamento ao usuário.
+remorses/gpuix,https://github.com/remorses/gpuix,https://github.com/remorses/gpuix/releases,Rust,biblioteca/framework,sim,Renderizadores React/Solid e runtime para criar interfaces GPUI.
+fastfetch-cli/fastfetch,https://github.com/fastfetch-cli/fastfetch,https://github.com/fastfetch-cli/fastfetch/releases,C,ferramenta CLI,sim,"CLI de informações do sistema, distribuída em executáveis."
+roots/bedrock,https://github.com/roots/bedrock,https://github.com/roots/bedrock/releases,PHP,outro,sim,Boilerplate WordPress para desenvolvedores; finalidade dos bumps é pouco detalhada.
+mavlink/mavros,https://github.com/mavlink/mavros,https://github.com/mavlink/mavros/releases,C++,aplicação/serviço,sim,Bridge MAVLink/ROS; R1 só entrega fontes devido ao EOL do ROS1.
+jasonwong1991/easy_proxies,https://github.com/jasonwong1991/easy_proxies,https://github.com/jasonwong1991/easy_proxies/releases,Go,aplicação/serviço,sim,Serviço de pool de proxies com WebUI e imagens Docker.
+scalameta/metals,https://github.com/scalameta/metals,https://github.com/scalameta/metals/releases,Scala,aplicação/serviço,sim,Servidor LSP Scala; notas completas estão nos blogs oficiais.
+bluesky-social/atproto,https://github.com/bluesky-social/atproto,https://github.com/bluesky-social/atproto/releases,TypeScript,biblioteca/framework,sim,Monorepo AT Protocol; releases sorteadas são SDKs e bibliotecas.
+zard-ui/zardui,https://github.com/zard-ui/zardui,https://github.com/zard-ui/zardui/releases,TypeScript,biblioteca/framework,sim,Biblioteca Angular; R1 sem commits novos na comparação (baixa confiança).
+umami-software/umami,https://github.com/umami-software/umami,https://github.com/umami-software/umami/releases,TypeScript,aplicação/serviço,sim,"Plataforma web de analytics, auto-hospedável ou em nuvem."
+docker/buildx,https://github.com/docker/buildx,https://github.com/docker/buildx/releases,Go,ferramenta CLI,sim,"Plugin da CLI Docker para builds, distribuído em binários."
+dermotduffy/advanced-camera-card,https://github.com/dermotduffy/advanced-camera-card,https://github.com/dermotduffy/advanced-camera-card/releases,TypeScript,outro,sim,Card de câmeras para Home Assistant; distribuído como extensão.
+mljar/mercury,https://github.com/mljar/mercury,https://github.com/mljar/mercury/releases,Python,biblioteca/framework,sim,Framework Python que transforma notebooks em aplicações web.
+JustinBeckwith/linkinator,https://github.com/JustinBeckwith/linkinator,https://github.com/JustinBeckwith/linkinator/releases,TypeScript,ferramenta CLI,sim,Verificador de links via terminal; também oferece API.
