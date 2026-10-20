@@ -461,7 +461,7 @@ recuperação), com a tabela DORA do enunciado. As saídas ficam em
 | `comparacao_lead_time.csv` | Em quantos repositórios o lead time por commit (b) é menor, igual ou maior que o por release (a), e a mediana da razão b/a |
 | `classificacao_c1.csv` | Categoria DORA de cada métrica, categoria geral e quantas métricas tinham valor, por repositório |
 | `distribuicao_c1.csv` | Quantidade e proporção de repositórios em cada categoria, por métrica e na geral |
-| `censura_e_cobertura.csv` | Releases avaliadas, que falharam e censuradas no CFR (b), episódios de recuperação e censura, e repositórios classificados com 4, 3 ou menos métricas |
+| `censura_e_cobertura.csv` | Releases avaliadas, que falharam e censuradas no CFR (b) e episódios de recuperação (somas só dos presentes; vazias se todos ausentes), repositórios sem essas contagens, Q1/mediana/Q3 da proporção de episódios censurados e proporção agregada (censurados ÷ total), e repositórios classificados com 4, 3 ou menos métricas |
 | `resumo.md` | As tabelas acima em Markdown, prontas para o artigo |
 | `figuras/*.png` | Distribuições das RQ01 a RQ04, com os cortes DORA, e a distribuição da categoria geral |
 
