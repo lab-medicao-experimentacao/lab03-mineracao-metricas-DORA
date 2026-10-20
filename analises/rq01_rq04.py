@@ -15,12 +15,15 @@ Saídas em ``<caminhos.saida>/analises/rq01_rq04/`` (CSV com vírgula, UTF-8 com
 - ``classificacao_c1.csv``: categoria DORA de cada métrica e a geral (C1 = frequência, lead
   time (a), CFR (a), recuperação);
 - ``distribuicao_c1.csv``: contagem e proporção por categoria, por métrica e na geral;
-- ``censura_e_cobertura.csv``: totais de releases e episódios censurados e de cobertura C1;
+- ``censura_e_cobertura.csv``: totais de releases e episódios censurados (somas só dos
+  presentes; repositórios sem contagem à parte), quartis e proporção agregada de episódios
+  censurados, e cobertura C1;
 - ``resumo.md``: as tabelas acima em Markdown (vírgula decimal, 2 casas; frações também em %);
 - ``figuras/*.png``: boxplots das RQ 01 a 04 e barras da classificação geral C1.
 
-As tabelas nunca excluem valores; só as figuras em escala log omitem valores ≤ 0 (a contagem
-aparece no título). Códigos de saída: 0 = ok; 2 = configuração ou dataset inválido.
+As tabelas nunca excluem valores. Nas figuras, a caixa usa a mediana e os quartis de todos os
+valores (os da descritiva); em escala log, valores ≤ 0 não viram ponto (a contagem aparece no
+título) e caixa com estatística ≤ 0 é desenhada truncada na base do eixo, com aviso no título. Códigos de saída: 0 = ok; 2 = configuração ou dataset inválido.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ import math
 import statistics
 import sys
 from collections.abc import Iterable
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 import numpy as np
@@ -68,6 +72,8 @@ COLUNAS = {
     "recuperacao_prop_censurados": "recuperacao_prop_censurados",
 }
 FRACOES = ("cfr_a", "cfr_b", "recuperacao_prop_censurados")  # devem estar entre 0 e 1
+CONTAGENS = ("cfr_b_n_avaliadas", "cfr_b_n_falharam", "cfr_b_n_censuradas",
+             "recuperacao_n_episodios")  # inteiras ≥ 0 (aceitas também como "20.0")
 NUMERICAS = tuple(nome for nome in COLUNAS if nome != "full_name")
 
 ARQUIVO_DATASET = "dataset_metricas.csv"
@@ -103,8 +109,13 @@ INDICADORES = {
     "soma_cfr_b_n_avaliadas": "Releases avaliadas no CFR (b)",
     "soma_cfr_b_n_falharam": "Releases que falharam no CFR (b)",
     "soma_cfr_b_n_censuradas": "Releases censuradas no CFR (b)",
+    "repos_sem_contagem_cfr_b": "Repositórios sem contagem de releases do CFR (b)",
     "soma_recuperacao_n_episodios": "Episódios de recuperação",
+    "repos_sem_contagem_episodios": "Repositórios sem contagem de episódios de recuperação",
+    "q1_recuperacao_prop_censurados": "Q1 da proporção de episódios censurados",
     "mediana_recuperacao_prop_censurados": "Mediana da proporção de episódios censurados",
+    "q3_recuperacao_prop_censurados": "Q3 da proporção de episódios censurados",
+    "prop_agregada_episodios_censurados": "Episódios censurados ÷ total de episódios",
     "repos_com_episodio_censurado": "Repositórios com ao menos 1 episódio censurado",
     "repos_sem_episodio": "Repositórios sem episódio de recuperação",
     "repos_c1_4_metricas": "Repositórios com 4 métricas em C1",
@@ -112,7 +123,12 @@ INDICADORES = {
     "repos_c1_ate_2_metricas": "Repositórios com 2 métricas ou menos em C1",
     "repos_geral_nulo": "Repositórios sem classificação geral",
 }
-INDICADORES_FRACAO = ("mediana_recuperacao_prop_censurados",)
+INDICADORES_FRACAO = (
+    "q1_recuperacao_prop_censurados",
+    "mediana_recuperacao_prop_censurados",
+    "q3_recuperacao_prop_censurados",
+    "prop_agregada_episodios_censurados",
+)
 
 TABELAS = {  # nome da tabela -> colunas do CSV
     "descritiva": COLUNAS_DESCRITIVA,
@@ -166,8 +182,10 @@ def validar(bruto: pd.DataFrame) -> pd.DataFrame:
 
     Retorna um DataFrame só com essas colunas: `full_name` como texto e as demais como float
     (NaN = ausente). Levanta `ErroDataset` listando todos os problemas: coluna obrigatória
-    faltando, `full_name` vazio ou repetido, valor não numérico ou infinito, negativo ou
-    fração fora de 0–1.
+    faltando, `full_name` vazio ou repetido, valor não numérico ou infinito, negativo,
+    fração fora de 0–1, contagem não inteira, `cfr_b_n_falharam` > `cfr_b_n_avaliadas` e
+    `recuperacao_n_episodios` incoerente com `recuperacao_horas` (0 episódios ⇔ horas vazio;
+    sem contagem de episódios, essa coerência não é verificada).
     """
     faltando = [c for c in COLUNAS.values() if c not in bruto.columns]
     if faltando:
@@ -210,10 +228,36 @@ def validar(bruto: pd.DataFrame) -> pd.DataFrame:
             acima = [(i, bruto.at[i, coluna]) for i in serie.index[serie > 1]]
             if acima:
                 problemas.append(f"coluna {coluna}: fração fora de 0–1 em {_exemplos(acima)}")
+        if nome in CONTAGENS:
+            fracionarias = [(i, bruto.at[i, coluna])
+                            for i in serie.index[serie.notna() & (serie % 1 != 0)]]
+            if fracionarias:
+                problemas.append(f"coluna {coluna}: valor não inteiro em {_exemplos(fracionarias)}")
         dados[coluna] = serie
+    if not problemas:  # coerência entre colunas só com cada coluna já válida
+        problemas = _incoerencias(dados)
     if problemas:
         raise ErroDataset(problemas)
     return dados
+
+
+def _incoerencias(dados: pd.DataFrame) -> list[str]:
+    """Contagens incoerentes entre colunas da mesma linha (uma mensagem por linha e regra)."""
+    falharam, avaliadas = _serie(dados, "cfr_b_n_falharam"), _serie(dados, "cfr_b_n_avaliadas")
+    episodios, horas = _serie(dados, "recuperacao_n_episodios"), _serie(dados, "recuperacao")
+    c_falharam, c_avaliadas = COLUNAS["cfr_b_n_falharam"], COLUNAS["cfr_b_n_avaliadas"]
+    c_episodios, c_horas = COLUNAS["recuperacao_n_episodios"], COLUNAS["recuperacao"]
+    problemas = []
+    for i in dados.index:
+        onde = f"linha {i + 2} ({dados.at[i, COLUNAS['full_name']]})"
+        if falharam[i] > avaliadas[i]:
+            problemas.append(
+                f"{onde}: {c_falharam} ({falharam[i]:g}) maior que {c_avaliadas} ({avaliadas[i]:g})")
+        if episodios[i] == 0 and pd.notna(horas[i]):
+            problemas.append(f"{onde}: {c_episodios} = 0, mas {c_horas} preenchido")
+        if episodios[i] > 0 and pd.isna(horas[i]):
+            problemas.append(f"{onde}: {c_episodios} = {episodios[i]:g}, mas {c_horas} vazio")
+    return problemas
 
 
 # --- cálculo (puro) ---------------------------------------------------------------------
@@ -223,9 +267,16 @@ def _serie(dados: pd.DataFrame, nome: str) -> pd.Series:
     return dados[COLUNAS[nome]]
 
 
-def _inteiro(valor: float) -> int | float:
-    """Contagens chegam como float; devolve int quando o valor é inteiro."""
+def _inteiro(valor: float) -> int | float | None:
+    """Contagens chegam como float; devolve int quando o valor é inteiro e None se ausente."""
+    if _vazio(valor):
+        return None
     return int(valor) if float(valor).is_integer() else float(valor)
+
+
+def _soma(serie: pd.Series) -> int | float | None:
+    """Soma dos valores presentes; None (nunca 0) quando todos estão ausentes."""
+    return _inteiro(serie.sum(min_count=1))
 
 
 def _tabela(linhas: list[dict], colunas: tuple[str, ...]) -> pd.DataFrame:
@@ -287,18 +338,34 @@ def tabela_distribuicao_c1(classificacao: pd.DataFrame) -> pd.DataFrame:
 
 
 def tabela_censura_e_cobertura(dados: pd.DataFrame, classificacao: pd.DataFrame) -> pd.DataFrame:
-    """Totais de censura (CFR (b) e recuperação) e de cobertura da classificação C1."""
+    """Totais de censura (CFR (b) e recuperação) e de cobertura da classificação C1.
+
+    Somas usam só os valores presentes (vazias, nunca 0, se todos forem ausentes); os
+    ausentes ficam em `repos_sem_contagem_*`. `prop_agregada_episodios_censurados` =
+    Σ(prop·n_episodios) ÷ Σn_episodios (episódios censurados ÷ total, fração 0–1), nas
+    linhas com as duas colunas preenchidas; vazia sem episódios.
+    """
     prop = _serie(dados, "recuperacao_prop_censurados")
+    episodios = _serie(dados, "recuperacao_n_episodios")
+    resumo_prop = resumo_descritivo(prop.tolist())
+    ambos = prop.notna() & episodios.notna()
+    total_episodios = episodios[ambos].sum()
+    agregada = float((prop[ambos] * episodios[ambos]).sum() / total_episodios) if total_episodios else None
     n_metricas = classificacao["n_metricas"]
     valores = {
         "total_repositorios": len(dados),
-        "soma_cfr_b_n_avaliadas": _inteiro(_serie(dados, "cfr_b_n_avaliadas").sum()),
-        "soma_cfr_b_n_falharam": _inteiro(_serie(dados, "cfr_b_n_falharam").sum()),
-        "soma_cfr_b_n_censuradas": _inteiro(_serie(dados, "cfr_b_n_censuradas").sum()),
-        "soma_recuperacao_n_episodios": _inteiro(_serie(dados, "recuperacao_n_episodios").sum()),
-        "mediana_recuperacao_prop_censurados": resumo_descritivo(prop.tolist())["mediana"],
+        "soma_cfr_b_n_avaliadas": _soma(_serie(dados, "cfr_b_n_avaliadas")),
+        "soma_cfr_b_n_falharam": _soma(_serie(dados, "cfr_b_n_falharam")),
+        "soma_cfr_b_n_censuradas": _soma(_serie(dados, "cfr_b_n_censuradas")),
+        "repos_sem_contagem_cfr_b": int(_serie(dados, "cfr_b_n_avaliadas").isna().sum()),
+        "soma_recuperacao_n_episodios": _soma(episodios),
+        "repos_sem_contagem_episodios": int(episodios.isna().sum()),
+        "q1_recuperacao_prop_censurados": resumo_prop["q1"],
+        "mediana_recuperacao_prop_censurados": resumo_prop["mediana"],
+        "q3_recuperacao_prop_censurados": resumo_prop["q3"],
+        "prop_agregada_episodios_censurados": agregada,
         "repos_com_episodio_censurado": int((prop > 0).sum()),
-        "repos_sem_episodio": int((_serie(dados, "recuperacao_n_episodios") == 0).sum()),
+        "repos_sem_episodio": int((episodios == 0).sum()),
         "repos_c1_4_metricas": int((n_metricas == 4).sum()),
         "repos_c1_3_metricas": int((n_metricas == 3).sum()),
         "repos_c1_ate_2_metricas": int((n_metricas <= 2).sum()),
@@ -332,7 +399,9 @@ def formatar_numero(valor: object) -> str:
         return "—"
     if isinstance(valor, (int, np.integer)):
         return str(valor)
-    return f"{valor:.2f}".replace(".", ",")
+    # arredonda meio para cima sobre o decimal impresso (0,625 -> 0,63; f"{:.2f}" daria 0,62)
+    arredondado = Decimal(repr(float(valor))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return f"{arredondado:.2f}".replace(".", ",")
 
 
 def formatar_fracao(valor: object) -> str:
@@ -458,6 +527,38 @@ def valores_para_figura(serie: pd.Series, escala_log: bool) -> tuple[np.ndarray,
     return valores[valores > 0], int((valores <= 0).sum())
 
 
+def estatisticas_caixa(serie: pd.Series, escala_log: bool) -> dict | None:
+    """Estatísticas da caixa, as mesmas da descritiva: mediana e quartis de TODOS os valores.
+
+    Os valores ≤ 0 entram na mediana e nos quartis mesmo em escala log (só os pontos são
+    omitidos). Bigodes = mínimo e máximo dos valores desenhados como ponto (em log, os > 0;
+    sem regra de 1,5·IQR). `truncada` lista as estatísticas da caixa ≤ 0 em escala log, que
+    não cabem no eixo. None quando não há valor presente.
+    """
+    resumo = resumo_descritivo(serie.tolist())
+    if resumo["n"] == 0:
+        return None
+    pontos, _ = valores_para_figura(serie, escala_log)
+    truncada = []
+    if escala_log:
+        truncada = [nome for nome, chave in (("mediana", "mediana"), ("Q1", "q1"), ("Q3", "q3"))
+                    if resumo[chave] <= 0]
+    return {
+        "med": resumo["mediana"],
+        "q1": resumo["q1"],
+        "q3": resumo["q3"],
+        "whislo": float(pontos.min()) if len(pontos) else None,
+        "whishi": float(pontos.max()) if len(pontos) else None,
+        "truncada": truncada,
+    }
+
+
+def _piso_log(series: list[tuple[str, pd.Series]], cortes: tuple[tuple[float, str], ...]) -> float:
+    """Base do eixo log onde as estatísticas ≤ 0 são desenhadas (metade do menor valor > 0)."""
+    positivos = [valor for _, serie in series for valor in valores_para_figura(serie, True)[0]]
+    return min(positivos + [valor for valor, _ in cortes], default=1.0) / 2
+
+
 def figura_boxplot(
     series: list[tuple[str, pd.Series]],
     *,
@@ -467,28 +568,42 @@ def figura_boxplot(
     escala_log: bool,
     limites_y: tuple[float, float] | None = None,
 ) -> Figure:
-    """Boxplot (sem outliers desenhados) com os pontos sobrepostos e os cortes DORA tracejados."""
+    """Caixa com as estatísticas de `estatisticas_caixa`, pontos sobrepostos e cortes DORA.
+
+    Em escala log, valores ≤ 0 não viram ponto (a contagem vai no título), mas entram na
+    caixa; mediana ou quartil ≤ 0 é desenhado na base do eixo e avisado no título.
+    """
     figura = _nova_figura()
     eixos = figura.add_subplot()
     _estilo_eixos(eixos)
     gerador = np.random.default_rng(0)  # jitter reprodutível
-    resumo_n, resumo_excluidos = [], []
+    piso = _piso_log(series, cortes) if escala_log else None
+    resumo_n, resumo_excluidos, resumo_truncada = [], [], []
     for posicao, (rotulo, serie) in enumerate(series, start=1):
-        valores, excluidos = valores_para_figura(serie, escala_log)
+        pontos, excluidos = valores_para_figura(serie, escala_log)
+        caixa = estatisticas_caixa(serie, escala_log)
         sufixo = f" {rotulo.split()[0]}" if len(series) > 1 else ""  # "(a)", "(b)"
-        resumo_n.append(f"{len(valores)}{sufixo}")
+        resumo_n.append(f"{int(serie.notna().sum())}{sufixo}")
         resumo_excluidos.append(f"{excluidos}{sufixo}")
-        if len(valores) == 0:
-            eixos.text(posicao, 0.5, "sem dados", transform=eixos.get_xaxis_transform(),
-                       ha="center", color=COR_TEXTO_SECUNDARIO)
+        if caixa and caixa["truncada"]:
+            prefixo = f"{sufixo.strip()} " if sufixo else ""
+            resumo_truncada.append(f"{prefixo}{' e '.join(caixa['truncada'])} ≤ 0")
+        if caixa is None or caixa["whishi"] is None:
+            eixos.text(posicao, 0.5, "sem dados" if caixa is None else "todos os valores ≤ 0",
+                       transform=eixos.get_xaxis_transform(), ha="center", color=COR_TEXTO_SECUNDARIO)
             continue
-        eixos.boxplot(valores, positions=[posicao], widths=0.5, showfliers=False,
-                      boxprops={"color": COR_TEXTO_SECUNDARIO},
-                      whiskerprops={"color": COR_TEXTO_SECUNDARIO},
-                      capprops={"color": COR_TEXTO_SECUNDARIO},
-                      medianprops={"color": COR_TEXTO, "linewidth": 2})
-        deslocamento = gerador.uniform(-0.15, 0.15, size=len(valores))
-        eixos.scatter(posicao + deslocamento, valores, s=18, color=COR_SERIE, alpha=0.6,
+        desenho = {chave: caixa[chave] for chave in ("med", "q1", "q3", "whislo", "whishi")}
+        if escala_log:
+            for chave in ("med", "q1", "q3"):
+                desenho[chave] = max(desenho[chave], piso)
+        desenho["whislo"] = min(desenho["whislo"], desenho["q1"])
+        eixos.bxp([desenho], positions=[posicao], widths=0.5, showfliers=False,
+                  boxprops={"color": COR_TEXTO_SECUNDARIO},
+                  whiskerprops={"color": COR_TEXTO_SECUNDARIO},
+                  capprops={"color": COR_TEXTO_SECUNDARIO},
+                  medianprops={"color": COR_TEXTO, "linewidth": 2})
+        deslocamento = gerador.uniform(-0.15, 0.15, size=len(pontos))
+        eixos.scatter(posicao + deslocamento, pontos, s=18, color=COR_SERIE, alpha=0.6,
                       edgecolors="white", linewidths=0.5, zorder=3)
 
     if escala_log:
@@ -499,13 +614,17 @@ def figura_boxplot(
                    va="center", ha="left", fontsize=8, color=COR_TEXTO_SECUNDARIO)
     if limites_y:
         eixos.set_ylim(*limites_y)
+    elif resumo_truncada:
+        eixos.set_ylim(bottom=piso)  # caixa truncada encosta na base do eixo
     eixos.set_xticks(range(1, len(series) + 1), [rotulo for rotulo, _ in series])
     eixos.set_xlim(0.5, len(series) + 0.5)
     eixos.set_ylabel(rotulo_y, color=COR_TEXTO)
 
     subtitulo = "n = " + ", ".join(resumo_n)
     if escala_log:
-        subtitulo += "; valores ≤ 0 excluídos da figura: " + ", ".join(resumo_excluidos)
+        subtitulo += "; pontos ≤ 0 omitidos no eixo log: " + ", ".join(resumo_excluidos)
+    if resumo_truncada:
+        subtitulo += "\ncaixa truncada no eixo: " + "; ".join(resumo_truncada)
     eixos.set_title(f"{titulo}\n{subtitulo}", fontsize=10, color=COR_TEXTO)
     return figura
 

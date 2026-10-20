@@ -134,8 +134,15 @@ def test_censura_e_cobertura(tabelas):
         "soma_cfr_b_n_avaliadas": 35,
         "soma_cfr_b_n_falharam": 6,
         "soma_cfr_b_n_censuradas": 3,
+        "repos_sem_contagem_cfr_b": 1,  # r5: soma só dos presentes
         "soma_recuperacao_n_episodios": 7,
-        "mediana_recuperacao_prop_censurados": pytest.approx(0.25),  # de 0,25; 0; 1
+        "repos_sem_contagem_episodios": 1,
+        # proporções presentes: 0,25 (r1); 0 (r2); 1 (r4) -> ordenadas 0; 0,25; 1
+        "q1_recuperacao_prop_censurados": pytest.approx(0.125),
+        "mediana_recuperacao_prop_censurados": pytest.approx(0.25),
+        "q3_recuperacao_prop_censurados": pytest.approx(0.625),
+        # (0,25·4 + 0·2 + 1·1) ÷ (4 + 2 + 1) = 2/7
+        "prop_agregada_episodios_censurados": pytest.approx(2 / 7),
         "repos_com_episodio_censurado": 2,
         "repos_sem_episodio": 1,
         "repos_c1_4_metricas": 2,
@@ -143,7 +150,34 @@ def test_censura_e_cobertura(tabelas):
         "repos_c1_ate_2_metricas": 1,
         "repos_geral_nulo": 1,
     }
-    assert set(valores) == set(rq.INDICADORES)
+    assert list(valores) == list(rq.INDICADORES)
+
+
+def _indicadores(dados):
+    tabela = rq.tabela_censura_e_cobertura(dados, rq.tabela_classificacao_c1(dados))
+    return dict(zip(tabela["indicador"], tabela["valor"]))
+
+
+def test_contagens_todas_ausentes_ficam_vazias_e_nao_zero(dados):
+    vazias = dados.assign(cfr_b_n_avaliadas=float("nan"), cfr_b_n_falharam=float("nan"),
+                          cfr_b_n_censuradas=float("nan"), recuperacao_n_episodios=float("nan"))
+    valores = _indicadores(vazias)
+    for indicador in ("soma_cfr_b_n_avaliadas", "soma_cfr_b_n_falharam", "soma_cfr_b_n_censuradas",
+                      "soma_recuperacao_n_episodios", "prop_agregada_episodios_censurados"):
+        assert valores[indicador] is None, indicador
+    assert valores["repos_sem_contagem_cfr_b"] == 5
+    assert valores["repos_sem_contagem_episodios"] == 5
+    assert valores["repos_sem_episodio"] == 0
+
+
+def test_censura_csv_grava_ausente_como_celula_vazia(dados, tmp_path):
+    tabela = rq.tabela_censura_e_cobertura(dados.assign(cfr_b_n_avaliadas=float("nan")),
+                                           rq.tabela_classificacao_c1(dados))
+    rq.gravar_csv(tmp_path / "c.csv", tabela)
+    with (tmp_path / "c.csv").open(encoding="utf-8-sig", newline="") as f:
+        linhas = {linha["indicador"]: linha["valor"] for linha in csv.DictReader(f)}
+    assert linhas["soma_cfr_b_n_avaliadas"] == ""
+    assert linhas["repos_sem_contagem_cfr_b"] == "5"
 
 
 # --- resumo.md --------------------------------------------------------------------------
@@ -152,6 +186,8 @@ def test_censura_e_cobertura(tabelas):
 def test_formatacao():
     assert rq.formatar_numero(5) == "5"
     assert rq.formatar_numero(1234.5) == "1234,50"
+    assert rq.formatar_numero(0.625) == "0,63"  # meio para cima, não o arredondamento binário
+    assert rq.formatar_numero(0.125) == "0,13"
     assert rq.formatar_numero(None) == "—"
     assert rq.formatar_numero(float("nan")) == "—"
     assert rq.formatar_fracao(0.25) == "0,25 (25,00 %)"
@@ -169,6 +205,10 @@ def test_resumo_md_contem_as_tabelas(tabelas):
     assert "| 4 | 1 | 1 | 2 | 0,25 (25,00 %) | 1,00 |" in texto
     assert "| Sem classificação | 0 (0,00 %) | 0 (0,00 %) | 2 (40,00 %) | 2 (40,00 %) | 1 (20,00 %) |" in texto
     assert "| Mediana da proporção de episódios censurados | 0,25 (25,00 %) |" in texto
+    assert "| Q3 da proporção de episódios censurados | 0,63 (62,50 %) |" in texto
+    assert "| Episódios censurados ÷ total de episódios | 0,29 (28,57 %) |" in texto
+    assert "| Repositórios sem contagem de releases do CFR (b) | 1 |" in texto
+    assert "| Repositórios sem contagem de episódios de recuperação | 1 |" in texto
     assert "| org/r5 | Low | Low | — | — | — | 2 |" in texto
 
 
@@ -183,14 +223,42 @@ def test_valores_para_figura_exclui_nao_positivos_so_no_log():
     assert valores.tolist() == [0.0, 2.0, 5.0] and excluidos == 0
 
 
+def test_estatisticas_caixa_usam_todos_os_valores_inclusive_zero():
+    serie = pd.Series([0.0, 0.1, 0.5, 2.0, 10.0, float("nan")])
+    caixa = rq.estatisticas_caixa(serie, escala_log=True)
+    # mesmas estatísticas da descritiva (com o zero); sem ele a mediana seria 1,25
+    assert (caixa["med"], caixa["q1"], caixa["q3"]) == pytest.approx((0.5, 0.1, 2.0))
+    assert (caixa["whislo"], caixa["whishi"]) == pytest.approx((0.1, 10.0))  # mín. > 0 e máx.
+    assert caixa["truncada"] == []
+
+
+def test_estatisticas_caixa_truncada_no_eixo_log():
+    caixa = rq.estatisticas_caixa(pd.Series([0.0, 0.0, 0.0, 5.0]), escala_log=True)
+    assert (caixa["med"], caixa["q1"], caixa["q3"]) == pytest.approx((0.0, 0.0, 1.25))
+    assert caixa["truncada"] == ["mediana", "Q1"]
+    linear = rq.estatisticas_caixa(pd.Series([0.0, 0.0, 0.0, 0.5]), escala_log=False)
+    assert linear["truncada"] == [] and linear["whislo"] == 0.0
+    assert rq.estatisticas_caixa(pd.Series([float("nan")]), escala_log=True) is None
+
+
+def test_figura_com_caixa_truncada_avisa_no_titulo():
+    dados = pd.DataFrame({"full_name": ["a", "b", "c", "d"],
+                          "recuperacao_horas": [0.0, 0.0, 0.0, 5.0]})
+    titulo = rq.figura_rq04(dados).axes[0].get_title()
+    assert "n = 4" in titulo and "pontos ≤ 0 omitidos no eixo log: 3" in titulo
+    assert "caixa truncada no eixo: mediana e Q1 ≤ 0" in titulo
+
+
 def test_titulos_informam_excluidos(dados, tabelas):
     figuras = rq.gerar_figuras(dados, tabelas)
     assert set(figuras) == {"rq01_frequencia.png", "rq02_lead_time.png", "rq03_cfr.png",
                             "rq04_recuperacao.png", "c1_distribuicao.png"}
     titulo_rq01 = figuras["rq01_frequencia.png"].axes[0].get_title()
-    assert "n = 4" in titulo_rq01 and "excluídos da figura: 1" in titulo_rq01
+    assert "n = 5" in titulo_rq01 and "pontos ≤ 0 omitidos no eixo log: 1" in titulo_rq01
+    assert "truncada" not in titulo_rq01
     titulo_rq02 = figuras["rq02_lead_time.png"].axes[0].get_title()
-    assert "excluídos da figura: 1 (a), 0 (b)" in titulo_rq02
+    assert "n = 5 (a), 4 (b)" in titulo_rq02
+    assert "pontos ≤ 0 omitidos no eixo log: 1 (a), 0 (b)" in titulo_rq02
     assert figuras["rq03_cfr.png"].axes[0].get_yscale() == "linear"
     assert figuras["rq04_recuperacao.png"].axes[0].get_yscale() == "log"
 
@@ -288,6 +356,15 @@ def _alterar(coluna: str, valor: str) -> str:
         ("cfr_b_n_falharam", "-1", "coluna cfr_b_n_falharam: valor negativo"),
         ("frequencia_semana", "abc", "coluna frequencia_semana: valor não numérico em linha 2 = 'abc'"),
         ("recuperacao_horas", "inf", "coluna recuperacao_horas: valor não numérico"),
+        ("cfr_b_n_avaliadas", "5.5", "coluna cfr_b_n_avaliadas: valor não inteiro em linha 2 = '5.5'"),
+        ("cfr_b_n_censuradas", "0.5", "coluna cfr_b_n_censuradas: valor não inteiro"),
+        ("recuperacao_n_episodios", "1.5", "coluna recuperacao_n_episodios: valor não inteiro"),
+        ("cfr_b_n_falharam", "21",
+         "linha 2 (org/r1): cfr_b_n_falharam (21) maior que cfr_b_n_avaliadas (20)"),
+        ("recuperacao_n_episodios", "0",
+         "linha 2 (org/r1): recuperacao_n_episodios = 0, mas recuperacao_horas preenchido"),
+        ("recuperacao_horas", "",
+         "linha 2 (org/r1): recuperacao_n_episodios = 4, mas recuperacao_horas vazio"),
     ],
 )
 def test_valor_invalido_retorna_2(escrever_config, tmp_path, caplog, coluna, valor, mensagem):
@@ -295,6 +372,18 @@ def test_valor_invalido_retorna_2(escrever_config, tmp_path, caplog, coluna, val
     assert rq.main(["--config", str(config)]) == 2
     assert mensagem in caplog.text
     assert not (saida / "analises").exists()
+
+
+def test_contagem_inteira_escrita_com_ponto_e_aceita():
+    bruto = pd.read_csv(io.StringIO(_alterar("cfr_b_n_avaliadas", "20.0")), dtype=str,
+                        keep_default_na=False)
+    assert rq.validar(bruto)["cfr_b_n_avaliadas"].iloc[0] == 20
+
+
+def test_sem_contagem_de_episodios_nao_exige_coerencia_com_horas():
+    bruto = pd.read_csv(io.StringIO(DATASET), dtype=str, keep_default_na=False)
+    bruto.loc[0, "recuperacao_n_episodios"] = ""  # r1 com horas, sem contagem
+    assert rq.validar(bruto)["recuperacao_horas"].iloc[0] == 0.5
 
 
 def test_validar_lista_todos_os_problemas():
