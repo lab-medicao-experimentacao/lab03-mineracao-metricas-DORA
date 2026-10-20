@@ -1,0 +1,45 @@
+﻿dimensao,full_name,tag_name,rotulo_A,rotulo_B,rotulo_C,tipo
+tipo_projeto,puemos/hls-downloader,,aplicação/serviço,outro,outro,2x1
+tipo_projeto,scala/scala3,,ferramenta CLI,outro,ferramenta CLI,2x1
+tipo_projeto,BishopFox/sliver,,aplicação/serviço,ferramenta CLI,aplicação/serviço,2x1
+tipo_projeto,diffplug/spotless,,outro,outro,biblioteca/framework,2x1
+tipo_projeto,web-infra-dev/rspress,,biblioteca/framework,ferramenta CLI,biblioteca/framework,2x1
+tipo_projeto,boxdot/gurk-rs,,aplicação/serviço,ferramenta CLI,ferramenta CLI,2x1
+tipo_projeto,argotorg/fe,,ferramenta CLI,outro,ferramenta CLI,2x1
+tipo_projeto,s3ql/s3ql,,ferramenta CLI,outro,aplicação/serviço,1-1-1
+tipo_projeto,scalameta/metals,,outro,aplicação/serviço,aplicação/serviço,2x1
+corretiva,nginx/nginx,release-1.29.5,não,sim,não,2x1
+corretiva,runatlantis/atlantis,v0.40.0,não,sim,não,2x1
+corretiva,rancher/rke2,v1.35.2+rke2r1,não,sim,não,2x1
+corretiva,rancher/rke2,v1.35.3+rke2r3,sim,sim,não,2x1
+corretiva,mosaico-labs/mosaico,v0.2.3,sim,não,sim,2x1
+corretiva,mosaico-labs/mosaico,mosaicod/v0.4.2,sim,sim,não,2x1
+corretiva,marcoroth/herb,v0.8.4,não,sim,não,2x1
+corretiva,marcoroth/herb,v0.8.10,não,sim,não,2x1
+corretiva,salesforce/lwc,v8.28.1,sim,sim,não,2x1
+corretiva,UglyToad/PdfPig,v0.1.16,não,sim,sim,2x1
+corretiva,melandlabs/openloomi,v0.7.10,não,sim,não,2x1
+corretiva,melandlabs/openloomi,v0.8.6,sim,sim,não,2x1
+corretiva,puemos/hls-downloader,v5.4.3,sim,não,sim,2x1
+corretiva,puemos/hls-downloader,v5.4.4,sim,não,sim,2x1
+corretiva,open-telemetry/opentelemetry-go,v1.41.0,não,sim,não,2x1
+corretiva,libp2p/go-libp2p,v0.50.0,não,sim,não,2x1
+corretiva,spring-projects/spring-session,4.0.1,não,não,sim,2x1
+corretiva,T8RIN/ImageToolbox,3.5.1,sim,sim,não,2x1
+corretiva,kyverno/kyverno,v1.16.3,sim,não,sim,2x1
+corretiva,less/less.js,v4.6.7,não,não,sim,2x1
+corretiva,Netflix/hollow,v7.14.40,não,sim,não,2x1
+corretiva,panva/jose,v6.1.3,sim,sim,não,2x1
+corretiva,panva/jose,v6.2.4,não,sim,não,2x1
+corretiva,BishopFox/sliver,v1.6.3,sim,sim,não,2x1
+corretiva,bobthecow/psysh,v0.12.15,não,sim,sim,2x1
+corretiva,web-infra-dev/rspress,v2.0.0-rc.1,não,sim,não,2x1
+corretiva,apache/superset,superset-helm-chart-0.17.3,não,sim,não,2x1
+corretiva,apache/superset,superset-helm-chart-0.21.1,sim,sim,não,2x1
+corretiva,apache/superset,superset-helm-chart-0.22.2,não,sim,não,2x1
+corretiva,apache/superset,superset-helm-chart-0.22.5,não,sim,não,2x1
+corretiva,mavlink/mavros,1.21.1,sim,sim,não,2x1
+corretiva,mavlink/mavros,2.15.1,sim,sim,não,2x1
+corretiva,mavlink/mavros,2.16.0,não,sim,não,2x1
+corretiva,zard-ui/zardui,v1.0.0-beta.67,sim,não,sim,2x1
+corretiva,mljar/mercury,v3.0.1,não,não,sim,2x1

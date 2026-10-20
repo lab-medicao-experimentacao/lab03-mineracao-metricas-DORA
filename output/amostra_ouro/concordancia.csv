@@ -1,0 +1,4 @@
+﻿dimensao,n_itens,n_avaliadores,concordancia_observada,kappa_fleiss,interpretacao
+tipo_projeto,60,3,0.8500,0.8451,quase perfeita
+entregas_reais,60,3,1.0000,,indefinido
+corretiva,300,3,0.8833,0.8278,quase perfeita

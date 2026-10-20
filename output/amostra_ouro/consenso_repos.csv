@@ -1,0 +1,61 @@
+﻿full_name,tipo_projeto,origem_tipo_projeto,entregas_reais,origem_entregas_reais
+nginx/nginx,aplicação/serviço,unanime,sim,unanime
+thunderbird/thunderbolt,aplicação/serviço,unanime,sim,unanime
+keldaanCommunity/pokemonAutoChess,aplicação/serviço,unanime,sim,unanime
+BradyAJohnston/MolecularNodes,outro,unanime,sim,unanime
+runatlantis/atlantis,aplicação/serviço,unanime,sim,unanime
+rancher/rke2,aplicação/serviço,unanime,sim,unanime
+mosaico-labs/mosaico,aplicação/serviço,unanime,sim,unanime
+failsafe-go/failsafe-go,biblioteca/framework,unanime,sim,unanime
+AzureAD/microsoft-authentication-library-for-js,biblioteca/framework,unanime,sim,unanime
+marcoroth/herb,biblioteca/framework,unanime,sim,unanime
+salesforce/lwc,biblioteca/framework,unanime,sim,unanime
+anthropics/claude-agent-sdk-python,biblioteca/framework,unanime,sim,unanime
+pion/turn,biblioteca/framework,unanime,sim,unanime
+UglyToad/PdfPig,biblioteca/framework,unanime,sim,unanime
+melandlabs/openloomi,aplicação/serviço,unanime,sim,unanime
+puemos/hls-downloader,outro,maioria,sim,unanime
+withcatai/node-llama-cpp,biblioteca/framework,unanime,sim,unanime
+open-telemetry/opentelemetry-go,biblioteca/framework,unanime,sim,unanime
+jlblancoc/nanoflann,biblioteca/framework,unanime,sim,unanime
+libp2p/go-libp2p,biblioteca/framework,unanime,sim,unanime
+bpmn-io/bpmn-js,biblioteca/framework,unanime,sim,unanime
+fjall-rs/fjall,biblioteca/framework,unanime,sim,unanime
+spring-projects/spring-session,biblioteca/framework,unanime,sim,unanime
+squid-cache/squid,aplicação/serviço,unanime,sim,unanime
+eigent-ai/eigent,aplicação/serviço,unanime,sim,unanime
+T8RIN/ImageToolbox,aplicação/serviço,unanime,sim,unanime
+vanilla-extract-css/vanilla-extract,biblioteca/framework,unanime,sim,unanime
+yzhao062/pyod,biblioteca/framework,unanime,sim,unanime
+kyverno/kyverno,aplicação/serviço,unanime,sim,unanime
+scala/scala3,ferramenta CLI,maioria,sim,unanime
+ExpressLRS/ExpressLRS,outro,unanime,sim,unanime
+less/less.js,biblioteca/framework,unanime,sim,unanime
+Netflix/hollow,biblioteca/framework,unanime,sim,unanime
+JustArchiNET/ArchiSteamFarm,aplicação/serviço,unanime,sim,unanime
+panva/jose,biblioteca/framework,unanime,sim,unanime
+getkin/kin-openapi,biblioteca/framework,unanime,sim,unanime
+BishopFox/sliver,aplicação/serviço,maioria,sim,unanime
+davidmonterocrespo24/velxio,aplicação/serviço,unanime,sim,unanime
+WordPress/gutenberg,outro,unanime,sim,unanime
+binwiederhier/ntfy,aplicação/serviço,unanime,sim,unanime
+diffplug/spotless,outro,maioria,sim,unanime
+bobthecow/psysh,ferramenta CLI,unanime,sim,unanime
+web-infra-dev/rspress,biblioteca/framework,maioria,sim,unanime
+apache/superset,aplicação/serviço,unanime,sim,unanime
+boxdot/gurk-rs,ferramenta CLI,maioria,sim,unanime
+argotorg/fe,ferramenta CLI,maioria,sim,unanime
+s3ql/s3ql,,pendente,sim,unanime
+remorses/gpuix,biblioteca/framework,unanime,sim,unanime
+fastfetch-cli/fastfetch,ferramenta CLI,unanime,sim,unanime
+roots/bedrock,outro,unanime,sim,unanime
+mavlink/mavros,aplicação/serviço,unanime,sim,unanime
+jasonwong1991/easy_proxies,aplicação/serviço,unanime,sim,unanime
+scalameta/metals,aplicação/serviço,maioria,sim,unanime
+bluesky-social/atproto,biblioteca/framework,unanime,sim,unanime
+zard-ui/zardui,biblioteca/framework,unanime,sim,unanime
+umami-software/umami,aplicação/serviço,unanime,sim,unanime
+docker/buildx,ferramenta CLI,unanime,sim,unanime
+dermotduffy/advanced-camera-card,outro,unanime,sim,unanime
+mljar/mercury,biblioteca/framework,unanime,sim,unanime
+JustinBeckwith/linkinator,ferramenta CLI,unanime,sim,unanime
