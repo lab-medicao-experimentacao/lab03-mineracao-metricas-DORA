@@ -430,6 +430,50 @@ O código de saída permite distinguir os resultados:
 | `3` | Avaliação registrada com F1 abaixo da meta; é necessário refinar e reavaliar |
 | `4` | Avaliação registrada, mas o consenso não tem corretivas para validar a detecção |
 
+## Analisar os resultados
+
+As análises da Sprint 3 ficam em `analises/` e partem só de CSVs locais, sem
+chamadas à API. Cada script pode ser executado de novo sempre que o dataset mudar.
+
+### Descrever as métricas e classificar os repositórios (RQ01 a RQ04)
+
+```bash
+python -m analises.rq01_rq04 --config config.yaml
+```
+
+O comando lê `output/dataset_metricas.csv`, o dataset por repositório gerado na
+Issue #35 (outro arquivo pode ser indicado com `--dataset`). As colunas usadas
+são `full_name`, `frequencia_semana`, `lead_time_a_horas`, `lead_time_b_horas`,
+`cfr_a`, `cfr_b`, `cfr_b_n_avaliadas`, `cfr_b_n_falharam`, `cfr_b_n_censuradas`,
+`recuperacao_horas`, `recuperacao_n_episodios` e `recuperacao_prop_censurados`.
+Células vazias contam como valor ausente e aparecem nas tabelas, nunca são
+preenchidas.
+
+Para cada métrica e variante, o script calcula mediana, quartis e IQR. Valores
+ausentes não entram no cálculo, mas são contados. Também classifica cada
+repositório pela combinação de referência C1 (release, lead time (a), CFR (a) e
+recuperação), com a tabela DORA do enunciado. As saídas ficam em
+`output/analises/rq01_rq04/`:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `descritiva.csv` | n, ausentes, mediana, Q1, Q3, IQR, mínimo e máximo de cada métrica e variante, com a unidade |
+| `comparacao_lead_time.csv` | Em quantos repositórios o lead time por commit (b) é menor, igual ou maior que o por release (a), e a mediana da razão b/a |
+| `classificacao_c1.csv` | Categoria DORA de cada métrica, categoria geral e quantas métricas tinham valor, por repositório |
+| `distribuicao_c1.csv` | Quantidade e proporção de repositórios em cada categoria, por métrica e na geral |
+| `censura_e_cobertura.csv` | Releases avaliadas, que falharam e censuradas no CFR (b), episódios de recuperação e censura, e repositórios classificados com 4, 3 ou menos métricas |
+| `resumo.md` | As tabelas acima em Markdown, prontas para o artigo |
+| `figuras/*.png` | Distribuições das RQ01 a RQ04, com os cortes DORA, e a distribuição da categoria geral |
+
+Nos gráficos em escala logarítmica, valores iguais a zero não podem ser
+desenhados. Eles saem só da figura e a quantidade aparece no título; as tabelas
+usam todos os valores.
+
+| Código | Significado |
+|---|---|
+| `0` | Análise gerada |
+| `2` | Configuração inválida, dataset ausente, coluna faltando ou valor fora do domínio |
+
 ## Executar os testes
 
 Com o ambiente virtual ativo, execute:
