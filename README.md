@@ -466,13 +466,14 @@ recuperação), com a tabela DORA do enunciado. As saídas ficam em
 | `figuras/*.png` | Distribuições das RQ01 a RQ04, com os cortes DORA, e a distribuição da categoria geral |
 
 Nos gráficos em escala logarítmica, valores iguais a zero não podem ser
-desenhados. Eles saem só da figura e a quantidade aparece no título; as tabelas
-usam todos os valores.
+desenhados como ponto, e a quantidade omitida aparece no título. A caixa usa a
+mesma mediana e os mesmos quartis das tabelas, calculados com todos os valores;
+se algum deles for zero, a caixa é cortada na base do eixo e o título avisa.
 
 | Código | Significado |
 |---|---|
 | `0` | Análise gerada |
-| `2` | Configuração inválida, dataset ausente, coluna faltando ou valor fora do domínio |
+| `2` | Configuração inválida, dataset ausente, coluna faltando, valor fora do domínio ou contagens incoerentes (não inteiras, mais falhas que releases avaliadas, episódios sem tempo de recuperação ou o contrário) |
 
 ## Executar os testes
 
