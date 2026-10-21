@@ -95,6 +95,7 @@ após concluírem a rotulagem independente.
 │   ├── amostra_ouro.py        # sorteio e planilhas da validação manual (#29) [A]
 │   ├── consenso.py            # kappa de Fleiss, desempates e consenso (#33) [A]
 │   ├── validacao_heuristica.py # avaliação offline e histórico de versões [B]
+│   ├── dataset.py             # dataset final por repositório, offline (#35) [C]
 │   ├── releases.py            # releases e tags                     [B]
 │   ├── commits.py             # compare entre releases              [B]
 │   └── workflow_runs.py       # runs da janela (por mês se ≥ 1.000) [C]
@@ -227,6 +228,7 @@ Unidades: **lead time e recuperação em horas**, frequência em **releases/sema
 | `data/processed/runs.csv` | C | runs válidos e ignorados (com coluna de classe) |
 | `data/processed/runs_meses_saturados.csv` | C | `full_name, periodo` dos meses que bateram o teto de 1.000 runs (só cabeçalho = nenhum) |
 | `output/amostra_ouro/` | A (#29) | `sorteio_repos.csv`, `sorteio_releases.csv`, `rotulos_<A\|B\|C>_repos.csv`, `rotulos_<A\|B\|C>_releases.csv` e `LEIAME.md` (`python -m pipeline.amostra_ouro`); `concordancia.csv`, `divergencias.csv`, `desempates.csv`, `consenso_repos.csv` e `consenso_releases.csv` (`python -m pipeline.consenso`, #33); ver README |
+| `output/metricas_repos.csv` | C (#35) | uma linha por repositório da amostra: metadados da RQ 06, frequência, lead time (a) e (b), CFR (a) e (b), recuperação, contagens de censura/ignoradas e classificação DORA (`python -m pipeline.dataset`, offline); colunas em `COLUNAS_DATASET` |
 | `output/dicionario_dados.md` | todos (consolida C no S02) | nome, tipo, unidade, fórmula/origem de cada coluna |
 
 ### 5.5 Avaliação da heurística (dono: B)
@@ -383,6 +385,7 @@ Caminho crítico: **#27 → #29 (re-sorteio) → #30–#32 → #33 → #34 → #
 python -m pipeline --config config.yaml               # coleta / funil / amostra (C, #27)
 python -m pipeline.amostra_ouro --config config.yaml  # sorteio + planilhas (A, #29); --forcar descarta rótulos
 python -m pipeline.consenso --config config.yaml      # kappa, divergências, desempates, consenso (A, #33)
+python -m pipeline.dataset --config config.yaml       # dataset final de métricas por repositório (C, #35)
 pytest --cov=metricas --cov-fail-under=80             # antes de qualquer PR
 ```
 
