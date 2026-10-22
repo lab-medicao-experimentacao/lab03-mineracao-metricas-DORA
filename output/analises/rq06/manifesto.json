@@ -1,0 +1,27 @@
+{
+  "entrada_sha256": "d24f38c59e5d36f229130a1ae6542f519889d11a69f8fcebb46cd10f95b8c81c",
+  "codigo_sha256": "2a2e9c2257fc560781f764c282a25261634692ae7eb5f407d0f6a7b5cb7c91d7",
+  "scipy": "1.14.1",
+  "statsmodels": "0.14.4",
+  "pandas": "2.2.3",
+  "numpy": "2.2.6",
+  "fatores": [
+    "stars",
+    "contributors",
+    "idade_dias",
+    "tipo_projeto"
+  ],
+  "metricas": {
+    "frequencia_semana": "releases/semana",
+    "lead_time_release_horas": "horas",
+    "lead_time_commit_horas": "horas",
+    "cfr_ci": "fração 0–1",
+    "cfr_entrega": "fração 0–1",
+    "recuperacao_mediana_horas": "horas"
+  },
+  "alfa": 0.05,
+  "min_por_grupo": 5,
+  "n_repositorios": 300,
+  "n_testes_familia": 24,
+  "cfr_entrega_validacao": "pendente_issue_34"
+}

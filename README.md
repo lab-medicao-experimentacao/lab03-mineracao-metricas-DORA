@@ -575,6 +575,24 @@ A interpretação final do CFR (b) depende da validação da heurística correti
 registra os achados reais e essa pendência. As saídas ficam em
 [`output/analises/rq05/`](output/analises/rq05/).
 
+## S03 — RQ06: características associadas ao desempenho
+
+Execute a análise offline dos quatro fatores (estrelas, contribuidores,
+idade e tipo de projeto) e das seis variantes de métricas:
+
+```bash
+python -m analises.rq06 --entrada output/metricas_repos.csv --saida output/analises/rq06
+```
+
+O comando gera descritivas por grupo, testes de Kruskal-Wallis ou Mann-Whitney,
+correção global de Holm, tamanhos de efeito, exclusões e relatório. O tipo de
+projeto usa somente os 60 repositórios com consenso humano. A interpretação
+do CFR (b) continua dependente da validação da heurística.
+
+Veja [método, grupos, unidades e dicionário das saídas](analises/rq06.md).
+Os resultados reais estão em [`output/analises/rq06/`](output/analises/rq06/)
+e nas seções de Resultados e Discussão do artigo.
+
 ## Executar os testes
 
 Com o ambiente virtual ativo, execute:

@@ -1,0 +1,17 @@
+fator,grupo,inferior,superior,inclui_inferior,n
+stars,Q1,1012.0,1613.0,True,75
+stars,Q2,1613.0,2900.0,False,75
+stars,Q3,2900.0,7757.5,False,75
+stars,Q4,7757.5,97803.0,False,75
+contributors,Q1,1.0,28.75,True,75
+contributors,Q2,28.75,77.5,False,75
+contributors,Q3,77.5,166.5,False,75
+contributors,Q4,166.5,2332.0,False,75
+idade_dias,Q1,4.0,575.5,True,75
+idade_dias,Q2,575.5,2047.0,False,75
+idade_dias,Q3,2047.0,3578.0,False,75
+idade_dias,Q4,3578.0,6652.0,False,75
+tipo_projeto,aplicação/serviço,,,,20
+tipo_projeto,biblioteca/framework,,,,25
+tipo_projeto,ferramenta CLI,,,,8
+tipo_projeto,outro,,,,7

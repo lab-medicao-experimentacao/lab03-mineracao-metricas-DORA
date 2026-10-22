@@ -1,0 +1,25 @@
+fator,metrica,unidade,n_total,n_excluidos,n,n_grupos,grupos,teste,estatistica,p_bruto,efeito_nome,efeito,efeito_interpretacao,situacao,p_holm,rejeita_holm,n_testes_familia
+stars,frequencia_semana,releases/semana,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,3.2145814303935984,0.35970934591265896,epsilon_quadrado,0.010751108462854844,,calculado,1.0,False,24
+stars,lead_time_release_horas,horas,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,14.52222192691022,0.0022739992062283674,epsilon_quadrado,0.04856930410337866,,calculado,0.038657986505882244,True,24
+stars,lead_time_commit_horas,horas,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,6.858647176079785,0.07654227170341396,epsilon_quadrado,0.02293861931799259,,calculado,0.8419649887375535,False,24
+stars,cfr_ci,fração 0–1,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,0.733555514112386,0.865284392326759,epsilon_quadrado,0.0024533629234527957,,calculado,1.0,False,24
+stars,cfr_entrega,fração 0–1,300,1,299,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,3.2495769897342908,0.3547224706924812,epsilon_quadrado,0.010904620770920439,,calculado,1.0,False,24
+stars,recuperacao_mediana_horas,horas,300,28,272,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,0.3388833348276421,0.9525571077697023,epsilon_quadrado,0.0012504920104341036,,calculado,1.0,False,24
+contributors,frequencia_semana,releases/semana,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,8.147264491229958,0.04306424569478844,epsilon_quadrado,0.02724837622484936,,calculado,0.5167709483374613,False,24
+contributors,lead_time_release_horas,horas,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,70.53547906976758,3.2778601289387387e-15,epsilon_quadrado,0.23590461227347015,,calculado,7.211292283665226e-14,True,24
+contributors,lead_time_commit_horas,horas,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,43.223521594684485,2.2062351013247514e-09,epsilon_quadrado,0.14456027289192136,,calculado,4.1918466925170276e-08,True,24
+contributors,cfr_ci,fração 0–1,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,5.187227124394811,0.1585897273479961,epsilon_quadrado,0.017348585700317092,,calculado,1.0,False,24
+contributors,cfr_entrega,fração 0–1,300,1,299,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,27.454033988609556,4.728339885656073e-06,epsilon_quadrado,0.09212763083426026,,calculado,8.51101179418093e-05,True,24
+contributors,recuperacao_mediana_horas,horas,300,28,272,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,9.96802186033824,0.0188399263637825,epsilon_quadrado,0.03678236848833299,,calculado,0.263758969092955,False,24
+idade_dias,frequencia_semana,releases/semana,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,44.6020433630699,1.1241796608784543e-09,epsilon_quadrado,0.14917071358886255,,calculado,2.2483593217569085e-08,True,24
+idade_dias,lead_time_release_horas,horas,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,74.21662724252496,5.333258297324983e-16,epsilon_quadrado,0.24821614462382932,,calculado,1.279981991357996e-14,True,24
+idade_dias,lead_time_commit_horas,horas,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,55.85389324473988,4.513617033251627e-12,epsilon_quadrado,0.18680231854428053,,calculado,9.478595769828417e-11,True,24
+idade_dias,cfr_ci,fração 0–1,300,0,300,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,0.43434099634153994,0.9330605607761709,epsilon_quadrado,0.0014526454727141803,,calculado,1.0,False,24
+idade_dias,cfr_entrega,fração 0–1,300,1,299,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,73.08110990268553,9.339130751622135e-16,epsilon_quadrado,0.2452386238345152,,calculado,2.148000072873091e-14,True,24
+idade_dias,recuperacao_mediana_horas,horas,300,28,272,4,Q1 | Q2 | Q3 | Q4,kruskal_wallis,13.128267286933351,0.0043672732231223406,epsilon_quadrado,0.04844379072669133,,calculado,0.06987637156995745,False,24
+tipo_projeto,frequencia_semana,releases/semana,300,240,60,4,aplicação/serviço | biblioteca/framework | ferramenta CLI | outro,kruskal_wallis,4.025491134815233,0.2587246715430633,epsilon_quadrado,0.06822866330195311,,calculado,1.0,False,24
+tipo_projeto,lead_time_release_horas,horas,300,240,60,4,aplicação/serviço | biblioteca/framework | ferramenta CLI | outro,kruskal_wallis,12.293971896955497,0.006441076699070303,epsilon_quadrado,0.20837240503314403,,calculado,0.09661615048605454,False,24
+tipo_projeto,lead_time_commit_horas,horas,300,240,60,4,aplicação/serviço | biblioteca/framework | ferramenta CLI | outro,kruskal_wallis,9.19379156908667,0.026822255332902934,epsilon_quadrado,0.1558269757472317,,calculado,0.34868931932773817,False,24
+tipo_projeto,cfr_ci,fração 0–1,300,240,60,4,aplicação/serviço | biblioteca/framework | ferramenta CLI | outro,kruskal_wallis,1.6158210861668816,0.6558078389347428,epsilon_quadrado,0.02738679807062511,,calculado,1.0,False,24
+tipo_projeto,cfr_entrega,fração 0–1,300,240,60,4,aplicação/serviço | biblioteca/framework | ferramenta CLI | outro,kruskal_wallis,4.836291025390328,0.18418478018991005,epsilon_quadrado,0.08197103432864963,,calculado,1.0,False,24
+tipo_projeto,recuperacao_mediana_horas,horas,300,243,57,4,aplicação/serviço | biblioteca/framework | ferramenta CLI | outro,kruskal_wallis,2.3457445792338945,0.5038141460019714,epsilon_quadrado,0.04188829605774812,,calculado,1.0,False,24

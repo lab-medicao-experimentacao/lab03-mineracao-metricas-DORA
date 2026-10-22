@@ -331,7 +331,7 @@ ou, nos empates 1-1-1, decisão da reunião registrada em `desempates.csv`.
 | `acertou` | booleano | - | `corretiva_consenso = corretiva_prevista`. |
 | `sem_commits` | booleano | - | A release não tinha commits na entrada. |
 
-## Análise RQ05 (`output/analises/`, dono: B, #46)
+## Análises RQ05 e RQ06 (`output/analises/`, dono: B, #46 e #47)
 
 As análises leem `output/metricas_repos.csv` e preservam suas unidades:
 frequência em releases/semana, tempos em horas e CFR em fração 0–1.
@@ -341,6 +341,7 @@ Nenhuma dessas saídas altera os contratos de coleta ou os rótulos.
 | Pasta | Saídas | Dicionário de colunas, tipos, unidades e fórmulas |
 |---|---|---|
 | `rq05/` | `correlacoes.csv`, `pares.csv`, `exclusoes.csv`, `relatorio.md` e duas dispersões PNG | [RQ05 — arquivos gerados e dicionário de dados](../analises/rq05.md#arquivos-gerados-e-dicionário-de-dados): Spearman, p-valor aproximado, n, exclusões por variante e rastreabilidade da entrada |
+| `rq06/` | `testes.csv`, `descritivas.csv`, `agrupamentos.csv`, `limites_grupos.csv`, `exclusoes.csv`, `manifesto.json`, `relatorio.md` | [RQ06 — saídas e dicionário de dados](../analises/rq06.md#saídas-e-dicionário-de-dados): n e quartis por grupo, H/U₁, p bruto/Holm, ε²/δ, situações inviáveis e rastreabilidade |
 
 Os comandos de reprodução estão no README e nesses documentos. O CFR (b)
 permanece com interpretação provisória até a validação da #34; eventual
