@@ -1,2 +1,2 @@
 ﻿dimensao,full_name,tag_name,rotulo_A,rotulo_B,rotulo_C,rotulo_final,justificativa
-tipo_projeto,s3ql/s3ql,,ferramenta CLI,outro,aplicação/serviço,,
+tipo_projeto,s3ql/s3ql,,ferramenta CLI,outro,aplicação/serviço,ferramenta CLI,"Decisão do grupo: uso pelo usuário é por comandos de linha (mount.s3ql, fsck.s3ql, mkfs.s3ql); sistema de arquivos FUSE sem interface gráfica nem serviço próprio."

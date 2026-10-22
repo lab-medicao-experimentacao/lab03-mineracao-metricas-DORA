@@ -45,7 +45,7 @@ web-infra-dev/rspress,biblioteca/framework,maioria,sim,unanime
 apache/superset,aplicação/serviço,unanime,sim,unanime
 boxdot/gurk-rs,ferramenta CLI,maioria,sim,unanime
 argotorg/fe,ferramenta CLI,maioria,sim,unanime
-s3ql/s3ql,,pendente,sim,unanime
+s3ql/s3ql,ferramenta CLI,reuniao,sim,unanime
 remorses/gpuix,biblioteca/framework,unanime,sim,unanime
 fastfetch-cli/fastfetch,ferramenta CLI,unanime,sim,unanime
 roots/bedrock,outro,unanime,sim,unanime
