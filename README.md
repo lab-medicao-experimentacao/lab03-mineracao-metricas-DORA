@@ -430,6 +430,37 @@ O código de saída permite distinguir os resultados:
 | `3` | Avaliação registrada com F1 abaixo da meta; é necessário refinar e reavaliar |
 | `4` | Avaliação registrada, mas o consenso não tem corretivas para validar a detecção |
 
+## Gerar o dataset final
+
+Com a coleta concluída (`output/repos.csv` e os arquivos de `data/processed/`), consolide as
+métricas de cada repositório com:
+
+```bash
+python -m pipeline.dataset --config config.yaml
+```
+
+O comando trabalha apenas com arquivos locais: não precisa de `GITHUB_TOKEN` nem faz consultas
+à API. Leva alguns segundos, porque lê o `commits.csv` em fluxo, um repositório por vez. Se
+faltar releases ou runs de algum repositório de `repos.csv`, ou se um arquivo tiver cabeçalho
+inesperado, ele lista o problema e retorna o código 2 sem gravar nada.
+
+O resultado é `output/metricas_repos.csv`, com uma linha por repositório e as seguintes
+colunas, todas descritas em [`output/dicionario_dados.md`](./output/dicionario_dados.md):
+
+| Grupo | Colunas |
+|---|---|
+| Metadados (RQ 06) | `full_name`, `default_branch`, `language`, `stars`, `contributors`, `created_at`, `idade_dias`, `tipo_projeto`, `entregas_reais` |
+| Frequência (RQ 01) | `n_releases`, `n_prereleases`, `frequencia_semana` |
+| Lead time (RQ 02) | `lead_time_release_horas` (a), `lead_time_commit_horas` (b) e as contagens de releases e commits usados e de releases ignoradas |
+| CFR (RQ 03) | `cfr_ci` (a) com as contagens de runs; `cfr_entrega` (b) com releases avaliadas, que falharam e censuradas |
+| Recuperação (RQ 04) | `recuperacao_mediana_horas`, `n_episodios_recuperacao`, `prop_episodios_censurados` |
+| Classificação DORA | `classe_frequencia`, `classe_lead_time`, `classe_cfr`, `classe_recuperacao`, `classe_geral`, na combinação de referência (lead time e CFR na variante a) |
+
+Valores vazios significam que não havia dados suficientes, e nunca zero. `tipo_projeto` e
+`entregas_reais` só vêm preenchidos nos 60 repositórios da amostra-ouro e só depois de
+`python -m pipeline.consenso` gerar o `consenso_repos.csv`; os demais ficam vazios. Se esse
+arquivo ainda não existe, o comando avisa e segue com essas colunas vazias.
+
 ## Analisar os resultados
 
 As análises da Sprint 3 ficam em `analises/` e partem só de CSVs locais, sem
@@ -441,11 +472,13 @@ chamadas à API. Cada script pode ser executado de novo sempre que o dataset mud
 python -m analises.rq01_rq04 --config config.yaml
 ```
 
-O comando lê `output/dataset_metricas.csv`, o dataset por repositório gerado na
+O comando lê `output/metricas_repos.csv`, o dataset por repositório gerado na
 Issue #35 (outro arquivo pode ser indicado com `--dataset`). As colunas usadas
-são `full_name`, `frequencia_semana`, `lead_time_a_horas`, `lead_time_b_horas`,
-`cfr_a`, `cfr_b`, `cfr_b_n_avaliadas`, `cfr_b_n_falharam`, `cfr_b_n_censuradas`,
-`recuperacao_horas`, `recuperacao_n_episodios` e `recuperacao_prop_censurados`.
+são `full_name`, `frequencia_semana`, `lead_time_release_horas` (a),
+`lead_time_commit_horas` (b), `cfr_ci` (a), `cfr_entrega` (b),
+`n_releases_avaliadas`, `n_releases_falharam`, `n_releases_censuradas`,
+`recuperacao_mediana_horas`, `n_episodios_recuperacao` e
+`prop_episodios_censurados`.
 Células vazias contam como valor ausente e aparecem nas tabelas, nunca são
 preenchidas.
 
