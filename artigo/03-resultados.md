@@ -64,11 +64,54 @@ Na categoria geral, 126 repositórios (42,0 %) são High, 115 (38,3 %) Medium, 3
 
 ## 3.6 RQ 05: frequência de deploy × taxa de falha
 
-`<B preenche (#46)>`
+A análise usa o dataset de 300 repositórios, com pares completos selecionados separadamente para cada variante, sem imputação. A Tabela abaixo foi obtida de `output/analises/rq05/correlacoes.csv` pelo teste bilateral de Spearman (SciPy 1.14.1); os coeficientes e p-valores completos estão preservados no CSV.
+
+| Variante de CFR | n | Excluídos | ρ de Spearman | p-valor aproximado |
+| --- | ---: | ---: | ---: | ---: |
+| (a) proxy de CI | 300 | 0 | 0,0585 | 0,3123 |
+| (b) proxy de entrega | 299 | 1 | 0,7655 | 8,2589 × 10⁻⁵⁹ |
+
+Não houve frequência ausente. O repositório `egoist/mygo` foi excluído somente da variante (b), por ausência de CFR de entrega: todas as suas releases foram censuradas no dataset. Os pares e a exclusão constam de `pares.csv` e `exclusoes.csv`. A interpretação do CFR (b) permanece provisória até a validação da heurística (#34).
+
+As figuras apresentam a frequência em releases/semana em escala logarítmica (todas as frequências são positivas) e o CFR em percentual. A transformação é apenas visual: Spearman usa os postos dos valores originais.
+
+![RQ05: frequência de releases e CFR de CI](../output/analises/rq05/dispersao_cfr_ci.png)
+
+![RQ05: frequência de releases e CFR de entrega](../output/analises/rq05/dispersao_cfr_entrega.png)
 
 ## 3.7 RQ 06: características associadas ao desempenho
 
-`<B preenche (#47)>`
+Foram analisados quatro fatores (estrelas, contribuidores, idade e tipo de projeto) e seis variantes de métricas, em uma família de 24 testes corrigida por Holm (α = 0,05). Todos os testes foram viáveis e usaram Kruskal-Wallis, pois os fatores têm quatro grupos. O suporte a dois grupos usa Mann-Whitney e δ de Cliff, mas não foi acionado nesta amostra. Os fatores numéricos têm quatro grupos de 75 repositórios, definidos antes das exclusões por métrica. Tipo de projeto tem 60 repositórios: 20 aplicações/serviços, 25 bibliotecas/frameworks, 8 ferramentas CLI e 7 de outros tipos; os demais 240 são excluídos apenas desse fator.
+
+Os quartis e seus membros estão em `output/analises/rq06/limites_grupos.csv` e `agrupamentos.csv`. Não há empates separados pela ordem dos repositórios; cortes repetidos seriam removidos. Os intervalos numéricos são abertos à esquerda e fechados à direita, exceto o primeiro, que inclui o mínimo.
+
+A família contém 13 testes com p bruto < 0,05 e 8 após Holm. A tabela apresenta os que permanecem significativos; os 24 testes completos, com p bruto, p corrigido, n e efeito ε² = H/(n−1), estão em `testes.csv` e `relatorio.md`.
+
+| Fator | Métrica | n | H | p bruto | p Holm | ε² |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Estrelas | Lead time (a) | 300 | 14,522 | 0,0023 | 0,0387 | 0,049 |
+| Contribuidores | Lead time (a) | 300 | 70,535 | 3,278e-15 | 7,211e-14 | 0,236 |
+| Contribuidores | Lead time (b) | 300 | 43,224 | 2,206e-09 | 4,192e-08 | 0,145 |
+| Contribuidores | CFR (b) | 299 | 27,454 | 4,728e-06 | 8,511e-05 | 0,092 |
+| Idade | Frequência | 300 | 44,602 | 1,124e-09 | 2,248e-08 | 0,149 |
+| Idade | Lead time (a) | 300 | 74,217 | 5,333e-16 | 1,280e-14 | 0,248 |
+| Idade | Lead time (b) | 300 | 55,854 | 4,514e-12 | 9,479e-11 | 0,187 |
+| Idade | CFR (b) | 299 | 73,081 | 9,339e-16 | 2,148e-14 | 0,245 |
+
+A tabela seguinte seleciona descritivas para confrontar as hipóteses. Cada célula é mediana (IQR); frequência em releases/semana e lead time em horas. Todos esses grupos têm 75 observações nessas duas métricas. As descritivas completas, com n válido, ausências, Q1 e Q3 de cada grupo e variante, estão em `descritivas.csv` e no relatório.
+
+| Fator | Grupo | Frequência: mediana (IQR) | Lead time (a): mediana (IQR) |
+| --- | --- | ---: | ---: |
+| Contribuidores | Q1 | 0,44 (0,65) | 23,44 (103,36) |
+| Contribuidores | Q2 | 0,27 (0,57) | 146,50 (644,97) |
+| Contribuidores | Q3 | 0,35 (0,42) | 280,64 (834,69) |
+| Contribuidores | Q4 | 0,31 (0,36) | 753,91 (1709,79) |
+| Idade | Q1 | 0,65 (0,84) | 25,93 (68,54) |
+| Idade | Q2 | 0,35 (0,60) | 169,29 (511,65) |
+| Idade | Q3 | 0,29 (0,32) | 341,28 (805,42) |
+| Idade | Q4 | 0,21 (0,25) | 793,12 (2014,69) |
+
+Na recuperação, os fatores numéricos usam 272 repositórios e o tipo de projeto usa 57; os demais não possuem valor da métrica. CFR (b) usa 299 nos fatores numéricos e 60 por tipo. Nenhum grupo usado no teste ficou com menos de cinco observações. As exclusões são registradas por fator × métrica em `exclusoes.csv`, sem imputação. As associações que usam CFR (b) são provisórias até a validação da #34.
 
 ## 3.8 RQ 07: sensibilidade à definição operacional
 
