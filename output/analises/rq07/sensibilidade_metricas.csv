@@ -1,0 +1,10 @@
+﻿par,metrica,n_comparados,n_mudaram,prop_mudaram,n_melhoraram,n_pioraram
+C1xC2,frequencia,300,17,0.056667,17,0
+C1xC2,lead_time,300,123,0.41,65,58
+C1xC2,cfr,299,224,0.749164,19,205
+C1xC3,frequencia,300,41,0.136667,41,0
+C1xC3,lead_time,300,123,0.41,65,58
+C1xC3,cfr,300,0,0.0,0,0
+C2xC3,frequencia,300,26,0.086667,26,0
+C2xC3,lead_time,300,0,0.0,0,0
+C2xC3,cfr,299,224,0.749164,205,19

@@ -72,4 +72,39 @@ Na categoria geral, 126 repositórios (42,0 %) são High, 115 (38,3 %) Medium, 3
 
 ## 3.8 RQ 07: sensibilidade à definição operacional
 
-`<C preenche (#49)>`
+As três combinações (C1, C2 e C3, definidas na Seção 2.6) foram comparadas par a par por `python -m analises.rq07_sensibilidade --config config.yaml` (`output/analises/rq07/`). Todos os 300 repositórios receberam categoria geral nas três combinações, então nenhum foi excluído dos pares.
+
+| Unidade de deploy | n | Mediana (por semana) | Q1 | Q3 | IQR |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Release (C1) | 300 | 0,35 | 0,17 | 0,70 | 0,52 |
+| Release + pré-release (C2) | 300 | 0,38 | 0,19 | 0,82 | 0,63 |
+| Tag (C3) | 300 | 0,47 | 0,21 | 0,93 | 0,72 |
+
+| Categoria geral | C1 | C2 | C3 |
+| --- | ---: | ---: | ---: |
+| Elite | 24 (8,00 %) | 4 (1,33 %) | 21 (7,00 %) |
+| High | 126 (42,00 %) | 65 (21,67 %) | 135 (45,00 %) |
+| Medium | 115 (38,33 %) | 188 (62,67 %) | 121 (40,33 %) |
+| Low | 35 (11,67 %) | 43 (14,33 %) | 23 (7,67 %) |
+
+| Par | Comparados | Mudaram | Melhoraram | Pioraram | Adjacentes | Saltos | κ ponderado | Interpretação |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| C1 × C2 | 300 | 146 (48,67 %) | 27 | 119 | 130 | 16 | 0,34 | razoável |
+| C1 × C3 | 300 | 72 (24,00 %) | 44 | 28 | 71 | 1 | 0,70 | substancial |
+| C2 × C3 | 300 | 127 (42,33 %) | 123 | 4 | 122 | 5 | 0,44 | moderada |
+
+"Melhoraram" e "pioraram" comparam a categoria da segunda combinação do par com a da primeira. A imensa maioria das mudanças é para uma categoria vizinha: 130 de 146 em C1 × C2, 71 de 72 em C1 × C3 e 122 de 127 em C2 × C3. Os 22 saltos de duas ou mais categorias ocorrem sobretudo entre C1 e C2 (16). As matrizes de transição estão na Figura `transicao_pares.png`, e a distribuição por combinação, na Figura `distribuicao_combinacoes.png`.
+
+| Par | Métrica | Mudaram | Melhoraram | Pioraram |
+| --- | --- | ---: | ---: | ---: |
+| C1 × C2 | Frequência | 17 (5,67 %) | 17 | 0 |
+| C1 × C2 | Lead time | 123 (41,00 %) | 65 | 58 |
+| C1 × C2 | CFR | 224 (74,92 %), de 299 | 19 | 205 |
+| C1 × C3 | Frequência | 41 (13,67 %) | 41 | 0 |
+| C1 × C3 | Lead time | 123 (41,00 %) | 65 | 58 |
+| C1 × C3 | CFR | 0 (0,00 %) | 0 | 0 |
+| C2 × C3 | Frequência | 26 (8,67 %) | 26 | 0 |
+| C2 × C3 | Lead time | 0 (0,00 %) | 0 | 0 |
+| C2 × C3 | CFR | 224 (74,92 %), de 299 | 205 | 19 |
+
+A tabela por métrica mostra de onde vem a mudança da categoria geral. A frequência só muda para melhor e em poucos repositórios (5,67 % ao incluir pré-releases e 13,67 % ao usar tags). A troca do lead time por release (a) pelo lead time por commit (b) muda a categoria de 41,00 % dos repositórios, quase metade para cada lado. A troca do CFR de CI (a) pelo CFR de entrega (b) muda a categoria de 74,92 % dos repositórios (299 com CFR (b)), e em 205 deles para pior.

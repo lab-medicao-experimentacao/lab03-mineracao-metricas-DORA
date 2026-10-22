@@ -2,7 +2,7 @@
 
 Entrada (tudo offline, sem token nem rede): ``output/repos.csv`` e os CSVs de
 ``data/processed/`` (``releases``, ``commits``, ``runs``, ``releases_sem_compare`` e
-``runs_meses_saturados``). Se existir ``output/amostra_ouro/consenso_repos.csv`` (#33), o
+``runs_meses_saturados``) e ``tags``. Se existir ``output/amostra_ouro/consenso_repos.csv`` (#33), o
 tipo do projeto e o consenso de entregas reais dos repositórios da amostra-ouro entram nas
 colunas ``tipo_projeto`` e ``entregas_reais``; os demais ficam vazios.
 
@@ -49,8 +49,9 @@ COLUNAS_METADADOS = (
     "idade_dias", "tipo_projeto", "entregas_reais",
 )
 COLUNAS_METRICAS = (
-    # RQ 01
+    # RQ 01 (e variantes de unidade de deploy da RQ 07: release + pré-release e tag)
     "n_releases", "n_prereleases", "frequencia_semana",
+    "frequencia_prerelease_semana", "n_tags", "frequencia_tag_semana",
     # RQ 02
     "lead_time_release_horas", "lead_time_commit_horas",
     "n_releases_lead_time", "n_commits_lead_time",
@@ -71,6 +72,7 @@ CABECALHOS = {
     "repos.csv": ("full_name", "default_branch", "stars", "language", "created_at",
                   "contributors", "idade_dias"),
     "releases.csv": ("full_name", "tag_name", "published_at", "draft", "prerelease"),
+    "tags.csv": ("full_name", "tag_name", "commit_sha", "commit_date"),
     "commits.csv": ("full_name", "tag_name", "sha", "author_date", "message"),
     "runs.csv": ("full_name", "id", "workflow_id", "event", "head_branch", "conclusion",
                  "classe", "created_at", "run_started_at", "updated_at"),
@@ -148,6 +150,19 @@ def ler_releases(caminho: Path) -> dict[str, list[dict]]:
     return dict(por_repo)
 
 
+def ler_tags(caminho: Path) -> dict[str, list[datetime]]:
+    """Datas de autoria dos commits apontados pelas tags, por repositório (tag sem data é ignorada)."""
+    por_repo: dict[str, list[datetime]] = defaultdict(list)
+    for linha in _linhas(caminho):
+        if not linha["commit_date"]:
+            continue
+        try:
+            por_repo[linha["full_name"]].append(_data(linha["commit_date"]))
+        except ValueError as erro:
+            raise ErroDataset(f"tags.csv: {erro}") from erro
+    return dict(por_repo)
+
+
 def ler_runs(caminho: Path) -> dict[str, list[dict]]:
     """Runs por repositório (contrato Run), na ordem do arquivo."""
     por_repo: dict[str, list[dict]] = defaultdict(list)
@@ -222,12 +237,13 @@ def ler_consenso_repos(pasta: Path) -> dict[str, dict[str, str]]:
 def calcular_repositorio(
     repo: dict, releases: list[dict], commits_por_release: dict[str, list[dict]],
     runs: list[dict], sem_compare: Counter, n_meses_saturados: int, janela: Janela,
-    consenso: dict[str, str] | None = None,
+    consenso: dict[str, str] | None = None, datas_tags: list[datetime] | None = None,
 ) -> dict:
     """Linha do dataset de um repositório (todas as variantes obrigatórias; sem rede nem disco).
 
     `repo` traz os campos de `repos.csv` (texto); `releases` é o histórico completo (a release
-    anterior à janela só serve de referência); `runs` traz também os runs ignorados.
+    anterior à janela só serve de referência); `runs` traz também os runs ignorados;
+    `datas_tags` são as datas dos commits apontados pelas tags (variante de deploy da RQ 07).
     """
     inicio, fim = janela.inicio, janela.fim
     principais = releases_publicadas(releases, inicio, fim)
@@ -243,6 +259,7 @@ def calcular_repositorio(
     recuperacao = tempo_recuperacao(validos, fim)
 
     frequencia = deployment_frequency(releases, inicio, fim)
+    tags_na_janela = [d for d in (datas_tags or []) if janela.contem(d)]
     lead_release = lead_time_por_release(commits_por_release, principais)
     lead_commit = lead_time_por_commit(commits_por_release, principais)
     cfr_a = cfr_ci(validos)
@@ -259,6 +276,10 @@ def calcular_repositorio(
         "entregas_reais": rotulos.get("entregas_reais", ""),
         "n_releases": len(principais), "n_prereleases": len(pre_releases),
         "frequencia_semana": frequencia,
+        "frequencia_prerelease_semana": deployment_frequency(
+            releases, inicio, fim, incluir_prerelease=True),
+        "n_tags": len(tags_na_janela),
+        "frequencia_tag_semana": len(tags_na_janela) / janela.semanas,
         "lead_time_release_horas": lead_release, "lead_time_commit_horas": lead_commit,
         "n_releases_lead_time": len(com_commits),
         "n_commits_lead_time": sum(len(commits_por_release[r["tag_name"]]) for r in com_commits),
@@ -295,6 +316,7 @@ def gerar_dataset(config: Config) -> Path:
     nomes = {r["full_name"] for r in repos}
     releases = ler_releases(processados / "releases.csv")
     runs = ler_runs(processados / "runs.csv")
+    tags = ler_tags(processados / "tags.csv")
     sem_compare = ler_sem_compare(processados / "releases_sem_compare.csv")
     saturados = ler_meses_saturados(processados / "runs_meses_saturados.csv")
     consenso = ler_consenso_repos(saida / PASTA_AMOSTRA_OURO)
@@ -312,7 +334,7 @@ def gerar_dataset(config: Config) -> Path:
         linhas[nome] = calcular_repositorio(
             repo_de[nome], releases[nome], commits, runs.get(nome, []),
             sem_compare.get(nome, Counter()), saturados.get(nome, 0), config.janela,
-            consenso.get(nome))
+            consenso.get(nome), tags.get(nome, []))
 
     for nome, commits in ler_commits_por_repo(processados / "commits.csv"):
         if nome in nomes:

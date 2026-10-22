@@ -450,7 +450,7 @@ colunas, todas descritas em [`output/dicionario_dados.md`](./output/dicionario_d
 | Grupo | Colunas |
 |---|---|
 | Metadados (RQ 06) | `full_name`, `default_branch`, `language`, `stars`, `contributors`, `created_at`, `idade_dias`, `tipo_projeto`, `entregas_reais` |
-| Frequência (RQ 01) | `n_releases`, `n_prereleases`, `frequencia_semana` |
+| Frequência (RQ 01) | `n_releases`, `n_prereleases`, `frequencia_semana` e as variantes de deploy da RQ 07: `frequencia_prerelease_semana`, `n_tags`, `frequencia_tag_semana` |
 | Lead time (RQ 02) | `lead_time_release_horas` (a), `lead_time_commit_horas` (b) e as contagens de releases e commits usados e de releases ignoradas |
 | CFR (RQ 03) | `cfr_ci` (a) com as contagens de runs; `cfr_entrega` (b) com releases avaliadas, que falharam e censuradas |
 | Recuperação (RQ 04) | `recuperacao_mediana_horas`, `n_episodios_recuperacao`, `prop_episodios_censurados` |
@@ -507,6 +507,53 @@ se algum deles for zero, a caixa é cortada na base do eixo e o título avisa.
 |---|---|
 | `0` | Análise gerada |
 | `2` | Configuração inválida, dataset ausente, coluna faltando, valor fora do domínio ou contagens incoerentes (não inteiras, mais falhas que releases avaliadas, episódios sem tempo de recuperação ou o contrário) |
+
+### Sensibilidade da classificação DORA (RQ07)
+
+```bash
+python -m analises.rq07_sensibilidade --config config.yaml
+```
+
+O comando lê `output/metricas_repos.csv` (outro arquivo pode ser indicado com `--dataset`) e as
+combinações de definições operacionais de `config.yaml`, na seção `sensibilidade.combinacoes`. Cada
+combinação escolhe:
+
+| Chave | Valores | Efeito |
+|---|---|---|
+| `unidade_deploy` | `release`, `release_prerelease`, `tag` | Coluna de frequência: `frequencia_semana`, `frequencia_prerelease_semana` ou `frequencia_tag_semana` |
+| `lead_time` | `a` (por release), `b` (por commit) | `lead_time_release_horas` ou `lead_time_commit_horas` |
+| `cfr` | `a` (proxy de CI), `b` (proxy de entrega) | `cfr_ci` ou `cfr_entrega` |
+
+São exigidas pelo menos três combinações, sem repetir as mesmas definições. A referência (C1) é
+release, lead time (a) e CFR (a); o tempo de recuperação é o mesmo em todas. Lead time e CFR (b) só
+existem para as releases principais, porque a comparação de commits foi coletada só entre elas: a
+unidade de deploy muda, portanto, apenas a frequência. A data de uma tag é a do commit que ela
+aponta.
+
+Cada repositório é classificado em cada combinação com a tabela DORA do enunciado. Para cada par de
+combinações, o script calcula a proporção de repositórios que mudam de categoria geral e o kappa de
+Cohen ponderado (pesos lineares, categorias ordenadas de Low a Elite). Um repositório sem categoria
+geral em alguma das duas combinações (menos de três métricas com valor) fica fora da proporção e do
+kappa, aparece em `n_excluidos` e entra na matriz de transição como `sem_classificacao`. Se todos os
+repositórios caírem na mesma categoria nas duas combinações, o kappa é indefinido e fica vazio.
+As saídas ficam em `output/analises/rq07/`:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `combinacoes.csv` | Definições de cada combinação e as colunas do dataset que ela usa |
+| `frequencia_por_unidade.csv` | Mediana, quartis e IQR da frequência de deploys em cada unidade de deploy (release, release + pré-release, tag) |
+| `classificacao_combinacoes.csv` | Categoria de cada métrica e a geral, por repositório e combinação |
+| `distribuicao_combinacoes.csv` | Repositórios por categoria geral e combinação |
+| `sensibilidade_pares.csv` | Por par: n, excluídos, quantos mudaram (e para melhor ou pior, adjacentes ou saltos), proporção, kappa ponderado e sua faixa de Landis & Koch |
+| `sensibilidade_metricas.csv` | Por par, quantos repositórios mudam de categoria em cada métrica (frequência, lead time, CFR) e em que direção |
+| `matrizes_transicao.csv` | Contagem por categoria na primeira e na segunda combinação do par |
+| `resumo.md` | As tabelas em Markdown, prontas para o artigo |
+| `figuras/*.png` | Matrizes de transição dos pares e distribuição por combinação |
+
+| Código | Significado |
+|---|---|
+| `0` | Análise gerada |
+| `2` | Configuração inválida, menos de três combinações, dataset ausente ou coluna ausente, não numérica, negativa ou fora do domínio |
 
 ## Executar os testes
 

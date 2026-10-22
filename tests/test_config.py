@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import pytest
 
 import os
+from pathlib import Path
 
 from pipeline.config import (
     MAX_WORKERS,
@@ -185,3 +186,45 @@ def test_carregar_dotenv_aceita_aspas_simples_bom_e_crlf(tmp_path, ambiente):
     (tmp_path / ".env").write_bytes("﻿GITHUB_TOKEN='abc#1'\r\nlinha sem igual\r\n".encode("utf-8"))
     assert carregar_dotenv(tmp_path / ".env") == {"GITHUB_TOKEN"}
     assert ler_token() == "abc#1"
+
+
+# --- sensibilidade (RQ 07, #49) -----------------------------------------------------------------
+
+COMBINACOES_YAML = """sensibilidade:
+  combinacoes:
+    C1: {unidade_deploy: release, lead_time: a, cfr: a}
+    C2: {unidade_deploy: release_prerelease, lead_time: b, cfr: b}
+    C3: {unidade_deploy: tag, lead_time: b, cfr: a}
+caminhos:"""
+
+
+def test_config_sem_sensibilidade_e_valido(escrever_config):
+    assert carregar_config(escrever_config()).sensibilidade == ()
+
+
+def test_combinacoes_lidas_do_config(escrever_config):
+    config = carregar_config(escrever_config({"caminhos:": COMBINACOES_YAML}))
+    assert [(c.nome, c.unidade_deploy, c.lead_time, c.cfr) for c in config.sensibilidade] == [
+        ("C1", "release", "a", "a"), ("C2", "release_prerelease", "b", "b"), ("C3", "tag", "b", "a")]
+
+
+def test_config_do_repositorio_define_as_tres_combinacoes():
+    config = carregar_config(Path(__file__).parents[1] / "config.yaml")
+    assert [c.nome for c in config.sensibilidade] == ["C1", "C2", "C3"]
+
+
+@pytest.mark.parametrize("substituicao", [
+    ("    C3: {unidade_deploy: tag, lead_time: b, cfr: a}\n", ""),                       # só 2 combinações
+    ("unidade_deploy: tag", "unidade_deploy: commit"),                                  # unidade inválida
+    ("unidade_deploy: tag, lead_time: b", "unidade_deploy: tag, lead_time: c"),         # variante inválida
+    ("lead_time: b, cfr: a}\ncaminhos", "lead_time: b, cfr: 1}\ncaminhos"),
+    ("    C3: {unidade_deploy: tag, lead_time: b, cfr: a}", "    C3: {unidade_deploy: release_prerelease, lead_time: b, cfr: b}"),  # repetida
+    ("    C3: {unidade_deploy: tag, lead_time: b, cfr: a}", "    C3: {unidade_deploy: tag, lead_time: b}"),  # chave ausente
+    ("sensibilidade:\n  combinacoes:\n", "sensibilidade:\n  combinacoes: lista\n"),
+])
+def test_sensibilidade_invalida_e_rejeitada(escrever_config, substituicao):
+    antigo, novo = substituicao
+    texto = COMBINACOES_YAML.replace(antigo, novo)
+    assert texto != COMBINACOES_YAML
+    with pytest.raises(ErroConfiguracao):
+        carregar_config(escrever_config({"caminhos:": texto}))

@@ -62,6 +62,22 @@ class AmostraOuro:
     semente: int            # random_state do sorteio (documentada no config.yaml)
 
 
+# Valores aceitos nas combinações de definições da RQ 07 (análise de sensibilidade).
+UNIDADES_DEPLOY = ("release", "release_prerelease", "tag")
+VARIANTES_METRICA = ("a", "b")
+MIN_COMBINACOES = 3
+
+
+@dataclass(frozen=True)
+class Combinacao:
+    """Combinação de definições operacionais da RQ 07 (enunciado, seção 5)."""
+
+    nome: str            # identificador usado nos arquivos de saída (ex.: C1)
+    unidade_deploy: str  # release | release_prerelease | tag (define a frequência)
+    lead_time: str       # variante (a) por release ou (b) por commit
+    cfr: str             # variante (a) proxy de CI ou (b) proxy de entrega
+
+
 @dataclass(frozen=True)
 class Config:
     janela: Janela
@@ -78,6 +94,8 @@ class Config:
     workers: int = 1  # requisições simultâneas; o config.yaml sem `coleta` usa WORKERS_PADRAO
     # obrigatória no config.yaml; None só em Config montado à mão (testes que não a usam)
     amostra_ouro: AmostraOuro | None = None
+    # opcional no config.yaml (seção `sensibilidade`); exigida só pela análise da RQ 07
+    sensibilidade: tuple[Combinacao, ...] = ()
 
 
 def carregar_config(caminho: str | Path) -> Config:
@@ -122,6 +140,7 @@ def carregar_config(caminho: str | Path) -> Config:
                     amostra_ouro["releases_por_repo"], "amostra_ouro.releases_por_repo"),
                 semente=_inteiro(amostra_ouro["semente"], "amostra_ouro.semente"),
             ),
+            sensibilidade=_ler_sensibilidade(bruto.get("sensibilidade")),
         )
     except KeyError as e:
         raise ErroConfiguracao(f"chave obrigatória ausente no config: {e}") from e
@@ -182,6 +201,24 @@ def _ler_janela(bruto: dict) -> Janela:
     )
 
 
+def _ler_sensibilidade(bruto: object) -> tuple[Combinacao, ...]:
+    if bruto is None:
+        return ()
+    combinacoes = _secao(bruto, "sensibilidade").get("combinacoes")
+    if not isinstance(combinacoes, dict):
+        raise ErroConfiguracao("sensibilidade.combinacoes deve ser um mapeamento nome: definições")
+    resultado = []
+    for nome, definicao in combinacoes.items():
+        definicao = _secao(definicao, f"sensibilidade.combinacoes.{nome}")
+        resultado.append(Combinacao(
+            nome=str(nome),
+            unidade_deploy=definicao["unidade_deploy"],
+            lead_time=definicao["lead_time"],
+            cfr=definicao["cfr"],
+        ))
+    return tuple(resultado)
+
+
 def _para_date(valor: object) -> date:
     if isinstance(valor, date):
         return valor
@@ -237,9 +274,27 @@ def _validar(config: Config) -> None:
         raise ErroConfiguracao("limites de inclusão e tamanho da amostra devem ser positivos")
     if not 1 <= config.workers <= MAX_WORKERS:
         raise ErroConfiguracao(f"coleta.workers deve estar entre 1 e {MAX_WORKERS}")
+    _validar_sensibilidade(config.sensibilidade)
     ouro = config.amostra_ouro
     if ouro is not None:
         if ouro.tamanho < 1 or ouro.releases_por_repo < 1:
             raise ErroConfiguracao("amostra_ouro.tamanho e amostra_ouro.releases_por_repo devem ser positivos")
         if not 0 <= ouro.semente <= MAX_SEMENTE:
             raise ErroConfiguracao(f"amostra_ouro.semente deve estar entre 0 e {MAX_SEMENTE}")
+
+
+def _validar_sensibilidade(combinacoes: tuple[Combinacao, ...]) -> None:
+    if not combinacoes:
+        return
+    if len(combinacoes) < MIN_COMBINACOES:
+        raise ErroConfiguracao(
+            f"sensibilidade.combinacoes precisa de pelo menos {MIN_COMBINACOES} combinações")
+    for c in combinacoes:
+        if c.unidade_deploy not in UNIDADES_DEPLOY:
+            raise ErroConfiguracao(
+                f"{c.nome}: unidade_deploy deve ser uma de {', '.join(UNIDADES_DEPLOY)}")
+        for campo in ("lead_time", "cfr"):
+            if getattr(c, campo) not in VARIANTES_METRICA:
+                raise ErroConfiguracao(f"{c.nome}: {campo} deve ser 'a' ou 'b'")
+    if len({(c.unidade_deploy, c.lead_time, c.cfr) for c in combinacoes}) != len(combinacoes):
+        raise ErroConfiguracao("sensibilidade.combinacoes tem duas combinações com as mesmas definições")
