@@ -555,6 +555,26 @@ As saídas ficam em `output/analises/rq07/`:
 | `0` | Análise gerada |
 | `2` | Configuração inválida, menos de três combinações, dataset ausente ou coluna ausente, não numérica, negativa ou fora do domínio |
 
+## S03 — RQ05: frequência de deploy e CFR
+
+Com o dataset final de 300 repositórios disponível, execute a análise offline:
+
+```bash
+python -m analises.rq05 --entrada output/metricas_repos.csv \
+  --coluna-frequencia frequencia_semana --saida output/analises/rq05 --escala-x log
+```
+
+O comando calcula Spearman separadamente para CFR (a) e (b), gera tabelas de pares/exclusões,
+dois gráficos PNG e um relatório com ρ, p-valor e n. Não precisa de token.
+Os nomes das colunas podem ser configurados por argumentos, conforme o
+dataset entregue pelo integrante C.
+
+Veja [instruções, unidades e dicionário das saídas da RQ05](analises/rq05.md).
+A interpretação final do CFR (b) depende da validação da heurística corretiva; o
+[relatório da análise](output/analises/rq05/relatorio.md)
+registra os achados reais e essa pendência. As saídas ficam em
+[`output/analises/rq05/`](output/analises/rq05/).
+
 ## Executar os testes
 
 Com o ambiente virtual ativo, execute:
