@@ -15,7 +15,7 @@ from analises import rq01_rq04 as rq
 # r5: 2 métricas (Low, Low) -> geral nula. Lead time: r1 b<a, r2 b=a, r3 e r4 b>a (r4 com a=0),
 # r5 sem (b).
 DATASET = textwrap.dedent("""\
-    full_name,frequencia_semana,lead_time_a_horas,lead_time_b_horas,cfr_a,cfr_b,cfr_b_n_avaliadas,cfr_b_n_falharam,cfr_b_n_censuradas,recuperacao_horas,recuperacao_n_episodios,recuperacao_prop_censurados,coluna_extra
+    full_name,frequencia_semana,lead_time_release_horas,lead_time_commit_horas,cfr_ci,cfr_entrega,n_releases_avaliadas,n_releases_falharam,n_releases_censuradas,recuperacao_mediana_horas,n_episodios_recuperacao,prop_episodios_censurados,coluna_extra
     org/r1,10,12,6,0.10,0.05,20,1,2,0.5,4,0.25,x
     org/r2,2,48,48,0.40,0.40,10,4,0,10,2,0,x
     org/r3,0.5,200,300,0.50,,0,0,0,,0,,x
@@ -84,7 +84,7 @@ def test_comparacao_lead_time(tabelas):
 
 
 def test_comparacao_sem_pares_fica_vazia(dados):
-    dados = dados.assign(lead_time_b_horas=float("nan"))
+    dados = dados.assign(lead_time_commit_horas=float("nan"))
     linha = rq.tabela_comparacao_lead_time(dados).iloc[0]
     assert linha["n_pares"] == 0
     assert linha["prop_b_menor"] is None and linha["mediana_razao_b_a"] is None
@@ -159,8 +159,8 @@ def _indicadores(dados):
 
 
 def test_contagens_todas_ausentes_ficam_vazias_e_nao_zero(dados):
-    vazias = dados.assign(cfr_b_n_avaliadas=float("nan"), cfr_b_n_falharam=float("nan"),
-                          cfr_b_n_censuradas=float("nan"), recuperacao_n_episodios=float("nan"))
+    vazias = dados.assign(n_releases_avaliadas=float("nan"), n_releases_falharam=float("nan"),
+                          n_releases_censuradas=float("nan"), n_episodios_recuperacao=float("nan"))
     valores = _indicadores(vazias)
     for indicador in ("soma_cfr_b_n_avaliadas", "soma_cfr_b_n_falharam", "soma_cfr_b_n_censuradas",
                       "soma_recuperacao_n_episodios", "prop_agregada_episodios_censurados"):
@@ -171,7 +171,7 @@ def test_contagens_todas_ausentes_ficam_vazias_e_nao_zero(dados):
 
 
 def test_censura_csv_grava_ausente_como_celula_vazia(dados, tmp_path):
-    tabela = rq.tabela_censura_e_cobertura(dados.assign(cfr_b_n_avaliadas=float("nan")),
+    tabela = rq.tabela_censura_e_cobertura(dados.assign(n_releases_avaliadas=float("nan")),
                                            rq.tabela_classificacao_c1(dados))
     rq.gravar_csv(tmp_path / "c.csv", tabela)
     with (tmp_path / "c.csv").open(encoding="utf-8-sig", newline="") as f:
@@ -243,7 +243,7 @@ def test_estatisticas_caixa_truncada_no_eixo_log():
 
 def test_figura_com_caixa_truncada_avisa_no_titulo():
     dados = pd.DataFrame({"full_name": ["a", "b", "c", "d"],
-                          "recuperacao_horas": [0.0, 0.0, 0.0, 5.0]})
+                          "recuperacao_mediana_horas": [0.0, 0.0, 0.0, 5.0]})
     titulo = rq.figura_rq04(dados).axes[0].get_title()
     assert "n = 4" in titulo and "pontos ≤ 0 omitidos no eixo log: 3" in titulo
     assert "caixa truncada no eixo: mediana e Q1 ≤ 0" in titulo
@@ -334,10 +334,10 @@ def test_config_invalido_retorna_2(tmp_path):
 
 
 def test_coluna_faltando_retorna_2_e_cita_a_coluna(escrever_config, tmp_path, caplog):
-    sem_coluna = pd.read_csv(io.StringIO(DATASET), dtype=str).drop(columns="cfr_b")
+    sem_coluna = pd.read_csv(io.StringIO(DATASET), dtype=str).drop(columns="cfr_entrega")
     config, saida = _preparar(escrever_config, tmp_path, sem_coluna.to_csv(index=False))
     assert rq.main(["--config", str(config)]) == 2
-    assert "coluna obrigatória ausente: cfr_b" in caplog.text
+    assert "coluna obrigatória ausente: cfr_entrega" in caplog.text
     assert not (saida / "analises").exists()
 
 
@@ -350,21 +350,21 @@ def _alterar(coluna: str, valor: str) -> str:
 @pytest.mark.parametrize(
     ("coluna", "valor", "mensagem"),
     [
-        ("cfr_a", "1.5", "coluna cfr_a: fração fora de 0–1 em linha 2 = '1.5'"),
-        ("recuperacao_prop_censurados", "2", "coluna recuperacao_prop_censurados: fração fora de 0–1"),
-        ("lead_time_a_horas", "-3", "coluna lead_time_a_horas: valor negativo em linha 2 = '-3'"),
-        ("cfr_b_n_falharam", "-1", "coluna cfr_b_n_falharam: valor negativo"),
+        ("cfr_ci", "1.5", "coluna cfr_ci: fração fora de 0–1 em linha 2 = '1.5'"),
+        ("prop_episodios_censurados", "2", "coluna prop_episodios_censurados: fração fora de 0–1"),
+        ("lead_time_release_horas", "-3", "coluna lead_time_release_horas: valor negativo em linha 2 = '-3'"),
+        ("n_releases_falharam", "-1", "coluna n_releases_falharam: valor negativo"),
         ("frequencia_semana", "abc", "coluna frequencia_semana: valor não numérico em linha 2 = 'abc'"),
-        ("recuperacao_horas", "inf", "coluna recuperacao_horas: valor não numérico"),
-        ("cfr_b_n_avaliadas", "5.5", "coluna cfr_b_n_avaliadas: valor não inteiro em linha 2 = '5.5'"),
-        ("cfr_b_n_censuradas", "0.5", "coluna cfr_b_n_censuradas: valor não inteiro"),
-        ("recuperacao_n_episodios", "1.5", "coluna recuperacao_n_episodios: valor não inteiro"),
-        ("cfr_b_n_falharam", "21",
-         "linha 2 (org/r1): cfr_b_n_falharam (21) maior que cfr_b_n_avaliadas (20)"),
-        ("recuperacao_n_episodios", "0",
-         "linha 2 (org/r1): recuperacao_n_episodios = 0, mas recuperacao_horas preenchido"),
-        ("recuperacao_horas", "",
-         "linha 2 (org/r1): recuperacao_n_episodios = 4, mas recuperacao_horas vazio"),
+        ("recuperacao_mediana_horas", "inf", "coluna recuperacao_mediana_horas: valor não numérico"),
+        ("n_releases_avaliadas", "5.5", "coluna n_releases_avaliadas: valor não inteiro em linha 2 = '5.5'"),
+        ("n_releases_censuradas", "0.5", "coluna n_releases_censuradas: valor não inteiro"),
+        ("n_episodios_recuperacao", "1.5", "coluna n_episodios_recuperacao: valor não inteiro"),
+        ("n_releases_falharam", "21",
+         "linha 2 (org/r1): n_releases_falharam (21) maior que n_releases_avaliadas (20)"),
+        ("n_episodios_recuperacao", "0",
+         "linha 2 (org/r1): n_episodios_recuperacao = 0, mas recuperacao_mediana_horas preenchido"),
+        ("recuperacao_mediana_horas", "",
+         "linha 2 (org/r1): n_episodios_recuperacao = 4, mas recuperacao_mediana_horas vazio"),
     ],
 )
 def test_valor_invalido_retorna_2(escrever_config, tmp_path, caplog, coluna, valor, mensagem):
@@ -375,26 +375,26 @@ def test_valor_invalido_retorna_2(escrever_config, tmp_path, caplog, coluna, val
 
 
 def test_contagem_inteira_escrita_com_ponto_e_aceita():
-    bruto = pd.read_csv(io.StringIO(_alterar("cfr_b_n_avaliadas", "20.0")), dtype=str,
+    bruto = pd.read_csv(io.StringIO(_alterar("n_releases_avaliadas", "20.0")), dtype=str,
                         keep_default_na=False)
-    assert rq.validar(bruto)["cfr_b_n_avaliadas"].iloc[0] == 20
+    assert rq.validar(bruto)["n_releases_avaliadas"].iloc[0] == 20
 
 
 def test_sem_contagem_de_episodios_nao_exige_coerencia_com_horas():
     bruto = pd.read_csv(io.StringIO(DATASET), dtype=str, keep_default_na=False)
-    bruto.loc[0, "recuperacao_n_episodios"] = ""  # r1 com horas, sem contagem
-    assert rq.validar(bruto)["recuperacao_horas"].iloc[0] == 0.5
+    bruto.loc[0, "n_episodios_recuperacao"] = ""  # r1 com horas, sem contagem
+    assert rq.validar(bruto)["recuperacao_mediana_horas"].iloc[0] == 0.5
 
 
 def test_validar_lista_todos_os_problemas():
     bruto = pd.read_csv(io.StringIO(DATASET), dtype=str, keep_default_na=False)
-    bruto.loc[0, "cfr_b"] = "1.2"
+    bruto.loc[0, "cfr_entrega"] = "1.2"
     bruto.loc[1, "full_name"] = "org/r1"
     bruto.loc[2, "full_name"] = " "
     with pytest.raises(rq.ErroDataset) as erro:
         rq.validar(bruto)
     texto = str(erro.value)
-    assert "cfr_b: fração fora de 0–1" in texto
+    assert "cfr_entrega: fração fora de 0–1" in texto
     assert "repositório repetido: org/r1" in texto
     assert "full_name: vazia em linha 4" in texto
 

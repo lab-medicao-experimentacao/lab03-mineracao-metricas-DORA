@@ -2,7 +2,7 @@
 
 Uso: ``python -m analises.rq01_rq04 --config config.yaml [--dataset CAMINHO]``. Não acessa a rede.
 
-Entrada: ``<caminhos.saida>/dataset_metricas.csv`` (padrão; produzido pela Issue #35), uma linha
+Entrada: ``<caminhos.saida>/metricas_repos.csv`` (padrão; produzido pela Issue #35), uma linha
 por repositório, com as colunas de ``COLUNAS``. Células vazias = ausente; colunas extras são
 ignoradas. Unidades: frequência em releases/semana, lead time e recuperação em horas, CFR e
 proporção de censurados como fração 0–1.
@@ -60,30 +60,30 @@ log = logging.getLogger("analises.rq01_rq04")  # não "__main__" ao rodar com -m
 COLUNAS = {
     "full_name": "full_name",
     "frequencia": "frequencia_semana",
-    "lead_time_a": "lead_time_a_horas",
-    "lead_time_b": "lead_time_b_horas",
-    "cfr_a": "cfr_a",
-    "cfr_b": "cfr_b",
-    "cfr_b_n_avaliadas": "cfr_b_n_avaliadas",
-    "cfr_b_n_falharam": "cfr_b_n_falharam",
-    "cfr_b_n_censuradas": "cfr_b_n_censuradas",
-    "recuperacao": "recuperacao_horas",
-    "recuperacao_n_episodios": "recuperacao_n_episodios",
-    "recuperacao_prop_censurados": "recuperacao_prop_censurados",
+    "lead_time_a": "lead_time_release_horas",
+    "lead_time_b": "lead_time_commit_horas",
+    "cfr_a": "cfr_ci",
+    "cfr_b": "cfr_entrega",
+    "cfr_b_n_avaliadas": "n_releases_avaliadas",
+    "cfr_b_n_falharam": "n_releases_falharam",
+    "cfr_b_n_censuradas": "n_releases_censuradas",
+    "recuperacao": "recuperacao_mediana_horas",
+    "recuperacao_n_episodios": "n_episodios_recuperacao",
+    "recuperacao_prop_censurados": "prop_episodios_censurados",
 }
 FRACOES = ("cfr_a", "cfr_b", "recuperacao_prop_censurados")  # devem estar entre 0 e 1
 CONTAGENS = ("cfr_b_n_avaliadas", "cfr_b_n_falharam", "cfr_b_n_censuradas",
              "recuperacao_n_episodios")  # inteiras ≥ 0 (aceitas também como "20.0")
 NUMERICAS = tuple(nome for nome in COLUNAS if nome != "full_name")
 
-ARQUIVO_DATASET = "dataset_metricas.csv"
+ARQUIVO_DATASET = "metricas_repos.csv"
 PASTA_SAIDA = Path("analises") / "rq01_rq04"
 PASTA_FIGURAS = "figuras"
 ARQUIVO_RESUMO = "resumo.md"
 CODIFICACAO = "utf-8-sig"
 DPI = 150
 CASAS_CSV = 6
-ORIGEM_DATASET = "o dataset_metricas.csv é produzido pela Issue #35"
+ORIGEM_DATASET = "o metricas_repos.csv é produzido pela Issue #35"
 
 UNIDADE_FRACAO = "fração"
 # (rq, metrica, variante, unidade, nome lógico da coluna)
