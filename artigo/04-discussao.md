@@ -46,7 +46,33 @@ A categoria geral se concentra em High (42,0 %) e Medium (38,3 %), com 8,0 % Eli
 
 ## 4.6 RQ 05 e RQ 06
 
-`<B preenche (#46, #47)>`
+### RQ 05: frequência e estabilidade
+
+*Hipótese (introdução):* associação fraca entre frequência de releases e CFR, com possíveis diferenças de direção ou intensidade entre os proxies.
+
+No proxy de CI, a magnitude observada é pequena (ρ = 0,0585, p = 0,3123, n = 300), compatível com a expectativa de associação fraca. O teste não fornece evidência de associação monotônica ao nível de 5%, mas isso não prova independência nem exclui relações não monotônicas. Nesta amostra, publicar com maior frequência não acompanha uma mudança monotônica clara na fração de execuções de CI que falham.
+
+No proxy de entrega, a associação é positiva e de magnitude maior (ρ = 0,7655, p ≈ 8,2589 × 10⁻⁵⁹, n = 299), contrariando a expectativa de associação fraca para essa variante. A hipótese se sustenta, portanto, apenas parcialmente: a diferença entre proxies se manifesta sobretudo na intensidade. Não foi realizado teste formal da diferença entre os dois coeficientes; seus p-valores isolados não respondem a essa pergunta, e as amostras diferem em um repositório.
+
+A associação do CFR (b) com frequência pode refletir, em parte, a própria definição operacional: uma release só conta como falha quando uma corretiva é publicada nos sete dias seguintes. Projetos com maior cadência têm mais oportunidades de apresentar uma release nesse intervalo. Isso é uma explicação possível, não uma causa demonstrada pelos dados. Padrões de versionamento, monorepos, composição das releases e erros da heurística também podem contribuir. Precisão, recall e F1 ainda não foram medidos nesta execução por falta dos CSVs processados; a #34 deve ser incorporada antes de concluir a interpretação do proxy de entrega. Se a heurística for refinada e o dataset mudar, esta análise deverá ser reexecutada.
+
+No proxy de CI, observou-se pouca associação monotônica entre frequência e taxa de falha, o que não demonstra equivalência de estabilidade entre projetos nem comprova a afirmação DORA sobre desempenho em produção. A associação positiva de entrega também não demonstra que publicar mais cause falhas: releases e execuções de CI são aproximações, há fatores não controlados, e a amostra reúne apenas projetos populares que passam pelos filtros. A análise observacional não identifica causalidade.
+
+Os dois p-valores são aproximações de `spearmanr`, sem ajuste entre variantes. A [documentação do SciPy](https://docs.scipy.org/doc/scipy-1.14.1/reference/generated/scipy.stats.spearmanr.html) ressalta que essa aproximação tem precisão adequada em amostras muito grandes (>500), acima dos tamanhos usados aqui. As conclusões devem considerar os coeficientes, as dispersões, a seleção amostral e a validade dos proxies, em vez de depender somente de significância estatística.
+
+### RQ 06: características associadas
+
+*Hipótese (introdução):* tipo de projeto e contribuidores mais associados ao desempenho do que estrelas, com diferenças pequenas a médias; mais contribuidores acompanhariam maior frequência e menor recuperação; projetos antigos teriam menor frequência e maior estabilidade.
+
+A hipótese se sustenta parcialmente. Contribuidores diferem sobretudo em lead time: ε² = 0,236 na variante (a), com p de Holm = 7,211e-14. As medianas de lead time (a) crescem de 23,44 (103,36) horas em Q1 para 753,91 (1709,79) horas em Q4 (valores entre parênteses são IQR). A variante (b) também difere após Holm, enquanto frequência e recuperação não preservam significância após o ajuste. A amostra, portanto, não sustenta a previsão de maior frequência e recuperação menor em projetos com mais contribuidores. Comparar as descritivas não estabelece que aumentar contribuidores cause um aumento do lead time; participação, idade, complexidade e organização das releases podem estar relacionadas.
+
+Idade apresenta diferenças na frequência, nas duas variantes de lead time e no CFR (b). A frequência mediana diminui de 0,65 (0,84) para 0,21 (0,25) releases/semana entre o quartil mais novo e o mais antigo, como previsto; o lead time (a) cresce de 25,93 (68,54) para 793,12 (2014,69) horas. O CFR (b) mediano é menor nos mais antigos, mas isso pode acompanhar a menor cadência e o mecanismo de sete dias discutido na RQ05. A hipótese de maior estabilidade nos antigos não é sustentada pelo CFR (a), cujas distribuições não diferem de forma detectável após a correção; a recuperação também perde significância após Holm. Os resultados de entrega aguardam a validação da #34.
+
+Estrelas apresentam uma única diferença após Holm, no lead time (a) (ε² = 0,049, p ajustado = 0,0387). As medianas vão de 72,18 (501,84) a 431,98 (951,64) horas entre Q1 e Q4. Esse efeito observado é menor que os de contribuidores e idade para a mesma métrica, mas não houve teste formal da diferença entre tamanhos de efeito. Nas demais métricas não se detectaram diferenças após Holm, resultado compatível com a expectativa de pouca associação com popularidade nesta amostra já filtrada por estrelas, sem demonstrar equivalência entre quartis.
+
+Nenhuma comparação por tipo de projeto permanece significativa após Holm. Isso não demonstra equivalência entre tipos: são apenas 60 repositórios, com grupos desbalanceados e um mínimo de cinco valores válidos no grupo `outro` para recuperação. Descritivamente, bibliotecas/frameworks têm frequência mediana maior e lead time menor que aplicações e CLI, em direção contrária à hipótese inicial, mas os testes globais corrigidos não permitem concluir que esses grupos diferem. O subconjunto rotulado tem menos poder estatístico do que a amostra completa.
+
+A redução de 13 testes com p bruto < 0,05 para 8 após Holm confirma a importância do ajuste previsto na introdução. Os testes são globais, sem comparações post hoc: não identificam quais pares explicam cada resultado. Os ε² são reportados sem atribuir limites arbitrários de pequeno/médio/grande, e os efeitos e p-valores não isolam confundidores. Grupos com ausências não recebem valores inventados. Projetos populares que atendem ao funil não representam automaticamente outros contextos; a ausência de significância não comprova ausência de relação. Um refinamento do CFR (b) exige regerar o dataset e repetir toda a família de Holm.
 
 ## 4.7 RQ 07 e RQ 08
 
