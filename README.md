@@ -461,6 +461,53 @@ Valores vazios significam que não havia dados suficientes, e nunca zero. `tipo_
 `python -m pipeline.consenso` gerar o `consenso_repos.csv`; os demais ficam vazios. Se esse
 arquivo ainda não existe, o comando avisa e segue com essas colunas vazias.
 
+## Analisar os resultados
+
+As análises da Sprint 3 ficam em `analises/` e partem só de CSVs locais, sem
+chamadas à API. Cada script pode ser executado de novo sempre que o dataset mudar.
+
+### Descrever as métricas e classificar os repositórios (RQ01 a RQ04)
+
+```bash
+python -m analises.rq01_rq04 --config config.yaml
+```
+
+O comando lê `output/metricas_repos.csv`, o dataset por repositório gerado na
+Issue #35 (outro arquivo pode ser indicado com `--dataset`). As colunas usadas
+são `full_name`, `frequencia_semana`, `lead_time_release_horas` (a),
+`lead_time_commit_horas` (b), `cfr_ci` (a), `cfr_entrega` (b),
+`n_releases_avaliadas`, `n_releases_falharam`, `n_releases_censuradas`,
+`recuperacao_mediana_horas`, `n_episodios_recuperacao` e
+`prop_episodios_censurados`.
+Células vazias contam como valor ausente e aparecem nas tabelas, nunca são
+preenchidas.
+
+Para cada métrica e variante, o script calcula mediana, quartis e IQR. Valores
+ausentes não entram no cálculo, mas são contados. Também classifica cada
+repositório pela combinação de referência C1 (release, lead time (a), CFR (a) e
+recuperação), com a tabela DORA do enunciado. As saídas ficam em
+`output/analises/rq01_rq04/`:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `descritiva.csv` | n, ausentes, mediana, Q1, Q3, IQR, mínimo e máximo de cada métrica e variante, com a unidade |
+| `comparacao_lead_time.csv` | Em quantos repositórios o lead time por commit (b) é menor, igual ou maior que o por release (a), e a mediana da razão b/a |
+| `classificacao_c1.csv` | Categoria DORA de cada métrica, categoria geral e quantas métricas tinham valor, por repositório |
+| `distribuicao_c1.csv` | Quantidade e proporção de repositórios em cada categoria, por métrica e na geral |
+| `censura_e_cobertura.csv` | Releases avaliadas, que falharam e censuradas no CFR (b) e episódios de recuperação (somas só dos presentes; vazias se todos ausentes), repositórios sem essas contagens, Q1/mediana/Q3 da proporção de episódios censurados e proporção agregada (censurados ÷ total), e repositórios classificados com 4, 3 ou menos métricas |
+| `resumo.md` | As tabelas acima em Markdown, prontas para o artigo |
+| `figuras/*.png` | Distribuições das RQ01 a RQ04, com os cortes DORA, e a distribuição da categoria geral |
+
+Nos gráficos em escala logarítmica, valores iguais a zero não podem ser
+desenhados como ponto, e a quantidade omitida aparece no título. A caixa usa a
+mesma mediana e os mesmos quartis das tabelas, calculados com todos os valores;
+se algum deles for zero, a caixa é cortada na base do eixo e o título avisa.
+
+| Código | Significado |
+|---|---|
+| `0` | Análise gerada |
+| `2` | Configuração inválida, dataset ausente, coluna faltando, valor fora do domínio ou contagens incoerentes (não inteiras, mais falhas que releases avaliadas, episódios sem tempo de recuperação ou o contrário) |
+
 ## Executar os testes
 
 Com o ambiente virtual ativo, execute:
