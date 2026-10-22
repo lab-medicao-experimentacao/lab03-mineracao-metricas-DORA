@@ -1,0 +1,4 @@
+﻿combinacao,unidade_deploy,lead_time,cfr,coluna_frequencia,coluna_lead_time,coluna_cfr
+C1,release,a,a,frequencia_semana,lead_time_release_horas,cfr_ci
+C2,release_prerelease,b,b,frequencia_prerelease_semana,lead_time_commit_horas,cfr_entrega
+C3,tag,b,a,frequencia_tag_semana,lead_time_commit_horas,cfr_ci

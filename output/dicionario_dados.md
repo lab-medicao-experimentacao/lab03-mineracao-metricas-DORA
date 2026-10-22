@@ -51,6 +51,9 @@ Uma linha por repositório da amostra final, na ordem de `repos.csv`. Gerado off
 | `n_releases` | inteiro | releases | Releases principais publicadas na janela (`GET /repos/{r}/releases`, `published_at`). |
 | `n_prereleases` | inteiro | releases | Pré-releases (não draft) publicadas na janela. Não entram na métrica principal; servem à variante da RQ 07. |
 | `frequencia_semana` | decimal | releases/semana | `n_releases ÷ (365 / 7)`. |
+| `frequencia_prerelease_semana` | decimal | releases/semana | Variante de unidade de deploy da RQ 07 (release + pré-release): `(n_releases + n_prereleases) ÷ (365 / 7)`. |
+| `n_tags` | inteiro | tags | Tags do repositório (`tags.csv`) cujo commit apontado tem `commit.author.date` na janela. A API não dá a data de criação da tag; usa-se a data do commit. |
+| `frequencia_tag_semana` | decimal | tags/semana | Variante de unidade de deploy da RQ 07 (tag): `n_tags ÷ (365 / 7)`. |
 
 ### RQ 02: lead time
 

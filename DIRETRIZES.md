@@ -45,6 +45,7 @@
 | Idade do repositório (`idade_dias`) | `(janela.fim − created_at)` em dias inteiros, arredondado para baixo, com `janela.fim` **exclusivo** (00:00 UTC do dia seguinte ao último dia da janela) — 1 dia a mais que usar o último dia às 00:00 | A (#4) — validar com o grupo |
 | Amostra-ouro: sorteio e planilhas (#29) | `config.yaml → amostra_ouro` (`tamanho: 60`, `releases_por_repo: 5`, `semente: 42`). Repositórios: `repos.csv` ordenado por `full_name` e `sample(n=60, random_state=42)` (independe da ordem do arquivo). Releases: deploys da janela (não draft, não pré-release, `releases_publicadas`), 5 por repositório com `random.Random("42:<full_name>")`; com menos de 5, todas + aviso. Cada release leva `url_release`, `tag_anterior` (mesma regra do lead time em `commits.py`: release principal publicada imediatamente antes, por `published_at` e tag, podendo ser de antes da janela) e `url_compare`. Planilhas por avaliador **sem nenhuma saída da heurística**; com rótulo ou observação preenchidos não são sobrescritas sem `--forcar`. *Atenção (monorepos):* a anterior pode ser de outro pacote (ex.: `@x/a@1.0` → `@x/b@2.0`), então o `compare` mistura pacotes; o avaliador deve se apoiar nas release notes. O sorteio é refeito quando a amostra final crescer para 300 (#27); só então as planilhas são versionadas | A (#29) — validar com o grupo |
 | Amostra-ouro: concordância e consenso (#33) | Kappa de Fleiss por dimensão (`tipo_projeto`, `entregas_reais` em 60 repositórios; `corretiva` em 300 releases) com `aggregate_raters` + `fleiss_kappa` (statsmodels), usando como categorias **todos** os valores válidos da dimensão; kappa indefinido (todos os rótulos numa só categoria) é reportado como `indefinido`, nunca 0 ou 1. Interpretação de Landis & Koch com faixas fechadas à direita (0,20 = leve; 0,2000001 = razoável). **Protocolo de desempate:** 3 iguais → `unanime`; 2×1 → maioria simples (`maioria`); 1-1-1 (só em `tipo_projeto` e `entregas_reais`) → decidido em reunião do grupo e registrado em `output/amostra_ouro/desempates.csv` (`rotulo_final` + `justificativa`; `reuniao`). Decisões preenchidas nunca são apagadas ao regerar. `python -m pipeline.consenso`; ver README | A (#33) — validar com o grupo |
+| Sensibilidade da RQ 07: combinações, tags e limites (#49) | Combinações em `config.yaml → sensibilidade.combinacoes`: **C1** release, lead time (a), CFR (a) (referência); **C2** release + pré-release, lead time (b), CFR (b); **C3** tag, lead time (b), CFR (a); recuperação igual em todas. A unidade de deploy altera só a **frequência** (`frequencia_semana`, `frequencia_prerelease_semana`, `frequencia_tag_semana`): o compare foi coletado só entre releases principais, então lead time e CFR (b) continuam baseados nelas (*ameaça*: a variante por tag não recalcula lead time nem CFR). A data de uma tag é a do commit apontado (`tags.csv → commit_date`), pois a API não dá a criação da tag. Repositório sem categoria geral numa combinação sai da proporção de mudança e do kappa do par (`n_excluidos`) e entra na matriz como `sem_classificacao`. Kappa indefinido → `indefinido`. `python -m analises.rq07_sensibilidade` | C (#49) — validar com o grupo |
 | Contribuidores com `anon=true` | Conta também autores sem conta no GitHub (só e-mail); o mesmo autor com e-mails diferentes conta mais de uma vez | A (#4) — enunciado manda `anon=true` |
 
 A janela vive **apenas em `config.yaml`** — nunca hard-coded.
@@ -106,6 +107,7 @@ após concluírem a rotulagem independente.
 │   ├── cfr.py                 # CFR (a) [C]; CFR (b) [B, S02]
 │   ├── concordancia.py        # kappa de Fleiss e consenso por maioria (#33) [A]
 │   ├── validacao.py           # precisão, recall, F1 e contagens [B]
+│   ├── sensibilidade.py       # mudança de categoria, kappa ponderado e matriz de transição (RQ07) [C]
 │   └── recuperacao.py         # tempo de recuperação (RQ04)         [C]
 ├── tests/
 │   ├── conftest.py            # fixtures compartilhadas
@@ -115,7 +117,7 @@ após concluírem a rotulagem independente.
 │   ├── cache/                 # respostas cruas da API
 │   └── processed/             # CSVs intermediários
 ├── output/                    # versionado: funil.csv, repos.csv, dicionário de dados
-├── analises/                  # notebooks/scripts das RQs (S03)
+├── analises/                  # scripts das RQs (S03): rq01_rq04.py [A], rq07_sensibilidade.py [C]
 └── artigo/                    # fontes .tex ou rascunhos .md das seções
 ```
 
@@ -386,6 +388,7 @@ python -m pipeline --config config.yaml               # coleta / funil / amostra
 python -m pipeline.amostra_ouro --config config.yaml  # sorteio + planilhas (A, #29); --forcar descarta rótulos
 python -m pipeline.consenso --config config.yaml      # kappa, divergências, desempates, consenso (A, #33)
 python -m pipeline.dataset --config config.yaml       # dataset final de métricas por repositório (C, #35)
+python -m analises.rq07_sensibilidade --config config.yaml  # sensibilidade da classificação DORA (C, #49)
 pytest --cov=metricas --cov-fail-under=80             # antes de qualquer PR
 ```
 

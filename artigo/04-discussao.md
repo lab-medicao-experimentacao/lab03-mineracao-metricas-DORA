@@ -50,4 +50,30 @@ A categoria geral se concentra em High (42,0 %) e Medium (38,3 %), com 8,0 % Eli
 
 ## 4.7 RQ 07 e RQ 08
 
-`<C preenche (#49, #50)>`
+### RQ 07: sensibilidade à definição operacional
+
+*Hipótese (introdução):* uma parcela considerável dos repositórios (da ordem de um terço) muda de categoria geral entre C1 e as alternativas, com concordância apenas moderada (kappa ponderado entre 0,4 e 0,6) e mudanças sobretudo para categorias adjacentes. Esperávamos que pré-releases e tags melhorassem a frequência, que o lead time por commit (b) melhorasse a categoria de lead time e que as duas variantes de CFR correspondessem pouco.
+
+A hipótese se confirma na ordem de grandeza e na direção das mudanças, mas não nos valores de kappa. A classificação é sensível: 48,67 % dos repositórios mudam de categoria entre C1 e C2, 24,00 % entre C1 e C3 e 42,33 % entre C2 e C3, e a média simples dos dois pares com C1 (36,3 %) fica perto do terço esperado. As mudanças são quase todas para categorias vizinhas (130 de 146 em C1 × C2, 71 de 72 em C1 × C3 e 122 de 127 em C2 × C3), e só 22 saltos de duas ou mais categorias aparecem nas 345 mudanças somadas dos três pares. Os kappas ponderados, porém, se espalham por três faixas em vez de ficarem na moderada: 0,34 (razoável) em C1 × C2, 0,70 (substancial) em C1 × C3 e 0,44 (moderada) em C2 × C3. Só um dos três pares cai no intervalo previsto.
+
+Os três motivos da hipótese têm resultados diferentes.
+
+1. **Pré-releases e tags melhoram a frequência, como previsto, mas pouco.** Todas as 17 e as 41 mudanças de categoria de frequência são para melhor, e ainda assim afetam só 5,67 % e 13,67 % dos repositórios. A mediana da frequência sobe de 0,35 para 0,38 (pré-releases) e 0,47 release por semana (tags), sempre abaixo do corte de uma por semana, e por isso a unidade de deploy muda pouco a categoria geral.
+2. **O lead time por commit (b) não melhora sistematicamente a categoria.** Dos 123 repositórios que mudam de categoria de lead time ao trocar (a) por (b), 65 melhoram e 58 pioram. Isso é coerente com a RQ 02: (b) é menor que (a) em 61 % dos repositórios, mas as medianas agregadas (cerca de 7,8 e 7,9 dias) ficam coladas ao corte de uma semana entre High e Medium, e uma diferença pequena cruza o corte nos dois sentidos.
+3. **A correspondência entre os CFR é baixa, como esperado, e é a maior fonte de sensibilidade.** 74,92 % dos repositórios mudam de categoria de CFR entre (a) e (b), 205 de 224 para pior, porque o CFR (b) tem mediana de 40,0 %, contra 6,05 % no CFR (a) (Seção 3.3).
+
+Essa assimetria explica a forma das comparações. C2 é a combinação que usa o CFR (b), e por isso os pares C1 × C2 e C2 × C3 são os de menor concordância (κ = 0,34 e 0,44) e os de mais mudanças. Em C2, só 4 repositórios (1,33 %) ficam em Elite, contra 24 (8,00 %) em C1, e 188 (62,67 %) ficam em Medium. Já C1 × C3 compartilha o CFR (a), e a diferença se resume à frequência por tag e ao lead time (b), o que dá o maior kappa (0,70). A escolha da variante do CFR, mais do que a da unidade de deploy, é o que decide a classificação geral de um repositório.
+
+**As conclusões das RQ 01 a RQ 06 são robustas?** Em parte.
+
+- **RQ 01 (frequência):** robusta no agregado. A mediana permanece na faixa Medium com pré-releases e com tags, e o efeito das variantes é sempre para cima e pequeno.
+- **RQ 02 (lead time):** robusta no agregado, porque as duas variantes têm medianas quase iguais, mas não por repositório: 41,00 % mudam de categoria de lead time.
+- **RQ 03 (CFR):** **não** robusta. O proxy de CI põe 228 repositórios (76,0 %) em Elite, e o proxy de entrega põe 134 dos 299 com CFR (b) (44,8 %) em Low. Falar em "taxa de falha" sem dizer qual proxy é enganoso.
+- **RQ 04 (recuperação):** não varia entre as combinações, porque só tem uma definição (CI). Sua robustez não foi testada aqui.
+- **RQ 05 e RQ 06:** já tratam as duas variantes de CFR separadamente. A sensibilidade medida indica que suas conclusões devem ser lidas variante a variante (Seção 4.6), e que a relação entre frequência e CFR (b) pode ser, em parte, efeito da própria definição (Seção 4.3).
+
+**Limites.** A variante por tag altera só a frequência: o lead time e o CFR (b) não foram recalculados por tag, porque a comparação de commits foi coletada entre releases principais. C3 mede, portanto, "tag para a frequência, release para o resto". A data da tag é a do commit apontado, que pode ser muito anterior à criação da tag; em 150 dos 300 repositórios o número de tags na janela supera o de releases (colunas `n_tags` e `n_releases` do dataset). Por fim, a combinação C2 mistura duas mudanças, pré-releases e variantes (b); como as pré-releases afetam só 5,67 % das categorias de frequência, quase toda a diferença de C2 vem das variantes (b), e a análise só as separa pela tabela por métrica.
+
+### RQ 08 (bônus)
+
+`<preencher: C, #50>`

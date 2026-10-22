@@ -39,6 +39,16 @@ amostra_ouro:
   releases_por_repo: 5
   semente: 42
 
+sensibilidade:
+  # Análise de sensibilidade da RQ 07 (`python -m analises.rq07_sensibilidade`): combinações de
+  # definições operacionais comparadas par a par. A recuperação é a mesma em todas.
+  #   unidade_deploy: release | release_prerelease | tag   (define a frequência de deploys)
+  #   lead_time: a (por release) | b (por commit)
+  #   cfr:       a (proxy de CI) | b (proxy de entrega)
+  combinacoes:
+    C1: {unidade_deploy: release, lead_time: a, cfr: a}             # referência
+    C2: {unidade_deploy: release_prerelease, lead_time: b, cfr: b}
+    C3: {unidade_deploy: tag, lead_time: b, cfr: a}
 coleta:
   # Requisições simultâneas à API (1 a 8; 1 = sequencial). A amostra e os CSVs não mudam
   # com este valor; a busca de candidatos é sempre sequencial (30 req/min).

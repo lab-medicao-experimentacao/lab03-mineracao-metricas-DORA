@@ -78,10 +78,11 @@ def runs():
 
 
 def calcular(releases, commits, runs, **extra):
-    argumentos = {"sem_compare": Counter(), "n_meses_saturados": 0, "consenso": None} | extra
+    argumentos = {"sem_compare": Counter(), "n_meses_saturados": 0, "consenso": None,
+                  "datas_tags": None} | extra
     return dataset.calcular_repositorio(
         REPO, releases, commits, runs, argumentos["sem_compare"],
-        argumentos["n_meses_saturados"], JANELA, argumentos["consenso"])
+        argumentos["n_meses_saturados"], JANELA, argumentos["consenso"], argumentos["datas_tags"])
 
 
 def test_frequencia_conta_so_releases_principais_da_janela(releases, commits, runs):
@@ -89,6 +90,20 @@ def test_frequencia_conta_so_releases_principais_da_janela(releases, commits, ru
     assert linha["n_releases"] == 5
     assert linha["n_prereleases"] == 1
     assert linha["frequencia_semana"] == pytest.approx(5 / (365 / 7))
+
+
+def test_variantes_de_unidade_de_deploy_da_rq07(releases, commits, runs):
+    datas = [dt(d) for d in (
+        "2025-09-30T23:59:59+00:00",  # antes da janela
+        "2025-10-01T00:00:00+00:00", "2026-01-01T12:00:00+00:00", "2026-03-01T12:00:00+00:00",
+        "2026-09-30T23:59:59+00:00",
+        "2026-10-01T00:00:00+00:00")]  # fim exclusivo
+    linha = calcular(releases, commits, runs, datas_tags=datas)
+    semanas = 365 / 7
+    assert linha["frequencia_prerelease_semana"] == pytest.approx(6 / semanas)  # 5 + 1 pré-release
+    assert linha["n_tags"] == 4
+    assert linha["frequencia_tag_semana"] == pytest.approx(4 / semanas)
+    assert calcular(releases, commits, runs)["n_tags"] == 0
 
 
 def test_lead_time_nas_duas_variantes(releases, commits, runs):
@@ -177,6 +192,10 @@ def ambiente(escrever_config, releases, commits, runs):
          "classe": r["classe"], "created_at": r["created_at"].isoformat(),
          "run_started_at": r["run_started_at"].isoformat(),
          "updated_at": r["updated_at"].isoformat()} for r in runs])
+    escrever(config.dir_processados / "tags.csv", dataset.CABECALHOS["tags.csv"], [
+        {"full_name": REPO["full_name"], "tag_name": tag, "commit_sha": "x", "commit_date": data}
+        for tag, data in [("v1.0.1", "2025-10-09T12:00:00+00:00"), ("v1.1.0", "2025-11-08T12:00:00+00:00"),
+                          ("antiga", "2024-01-01T00:00:00+00:00"), ("sem-commit", "")]])
     escrever(config.dir_processados / "releases_sem_compare.csv",
              dataset.CABECALHOS["releases_sem_compare.csv"],
              [{"full_name": REPO["full_name"], "tag_name": "v1.3.0", "motivo": "compare_404"}])
@@ -201,6 +220,8 @@ def test_gera_csv_com_todas_as_colunas_do_dicionario(ambiente):
     assert linha["n_releases_compare_404"] == "1"
     assert linha["tipo_projeto"] == ""  # sem consenso_repos.csv
     assert linha["classe_geral"] == "Medium"
+    assert linha["n_tags"] == "2"  # a tag antiga e a sem data não contam
+    assert float(linha["frequencia_tag_semana"]) == pytest.approx(2 / (365 / 7))
 
 
 def test_consenso_da_amostra_ouro_preenche_tipo_do_projeto(ambiente):

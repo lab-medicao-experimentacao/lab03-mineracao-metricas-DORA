@@ -1,0 +1,4 @@
+﻿unidade_deploy,coluna,n,n_ausentes,mediana,q1,q3,iqr
+release,frequencia_semana,300,0,0.345205,0.172603,0.695205,0.522603
+release_prerelease,frequencia_prerelease_semana,300,0,0.383562,0.191781,0.824658,0.632877
+tag,frequencia_tag_semana,300,0,0.469863,0.210959,0.930137,0.719178
