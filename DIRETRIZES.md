@@ -432,7 +432,7 @@ Ao trabalhar neste repositório, a IA deve:
 6. Rodar `pytest --cov=metricas --cov-fail-under=80` antes de declarar uma tarefa concluída e mostrar o resultado.
 7. Não commitar nem abrir PR sem pedido do integrante responsável.
 8. Ao encontrar ambiguidade no enunciado, registrar a dúvida na seção 1 deste arquivo (ou numa Issue) em vez de decidir silenciosamente.
-9. **Amostra-ouro (S02):** nunca preencher, alterar ou "sugerir" rótulos nas planilhas `output/amostra_ouro/rotulos_*.csv`, que são julgamento humano independente. Nunca mostrar a um avaliador a saída da heurística de release corretiva (#28), nem as planilhas dos outros antes do consenso. Nunca rodar `amostra_ouro --forcar` sem pedido explícito, porque ele descarta rótulos. Nunca commitar rótulos sintéticos de teste fora de `tests/`.
+9. **Amostra-ouro (S02):** por decisão do grupo com o professor, a IA pode preencher a planilha do avaliador que pedir (`output/amostra_ouro/rotulos_<X>_*.csv`). Nunca abrir as planilhas dos outros avaliadores antes do consenso, nunca usar a saída da heurística de release corretiva (#28) como insumo e nunca rodar `amostra_ouro --forcar` sem pedido explícito, porque ele descarta rótulos. Nunca commitar rótulos sintéticos de teste fora de `tests/`.
 10. Não abrir Issues nem registrar o link do Projects sem pedido do integrante.
 11. Ao delegar a subagentes, dividir a Issue em tarefas de escopo fechado (contrato/API exata, arquivos que podem ser tocados, critérios de aceite, relatório curto), em vez de um agente que faz tudo.
 12. Antes de começar, conferir na seção 6.5 a situação das Issues da sprint e quem é o dono de cada uma.
