@@ -36,7 +36,7 @@ Comparando repositório a repositório, o lead time por commit (b) é menor que 
 
 As duas variantes contam histórias diferentes. No proxy de CI (a), a mediana é de 6,05 % de execuções com falha, e 228 repositórios (76,0 %) ficam na faixa Elite (≤ 15 %). No proxy de entrega (b), a mediana é de 40,0 %, e a dispersão é muito maior.
 
-No CFR (b), foram avaliadas 10.796 releases, das quais 7.131 (66,1 % no agregado) foram seguidas por uma release corretiva em até 7 dias; 292 releases, publicadas nos últimos 7 dias da janela, foram censuradas. Um repositório não tem CFR (b) porque todas as suas releases foram censuradas. `<preencher após #34: F1 da heurística usada>` A Figura `rq03_cfr.png` compara as duas variantes.
+No CFR (b), foram avaliadas 10.796 releases, das quais 7.131 (66,1 % no agregado) foram seguidas por uma release corretiva em até 7 dias; 292 releases, publicadas nos últimos 7 dias da janela, foram censuradas. Um repositório não tem CFR (b) porque todas as suas releases foram censuradas. Esses valores foram calculados com a **v1**, cuja validação na #34 obteve precisão de 0,3755, recall de 0,9515 e F1 de 0,5385 (abaixo da meta de 0,70). Por restrição de prazo, v2 e v3 não foram aplicadas ao dataset nem às análises desta entrega; o F1 de 0,7042 da v3 refere-se somente ao experimento de validação (Seção 2.7). A Figura `rq03_cfr.png` compara as duas variantes.
 
 ## 3.4 RQ 04: tempo de recuperação
 
@@ -71,7 +71,7 @@ A análise usa o dataset de 300 repositórios, com pares completos selecionados 
 | (a) proxy de CI | 300 | 0 | 0,0585 | 0,3123 |
 | (b) proxy de entrega | 299 | 1 | 0,7655 | 8,2589 × 10⁻⁵⁹ |
 
-Não houve frequência ausente. O repositório `egoist/mygo` foi excluído somente da variante (b), por ausência de CFR de entrega: todas as suas releases foram censuradas no dataset. Os pares e a exclusão constam de `pares.csv` e `exclusoes.csv`. A interpretação do CFR (b) permanece provisória até a validação da heurística (#34).
+Não houve frequência ausente. O repositório `egoist/mygo` foi excluído somente da variante (b), por ausência de CFR de entrega: todas as suas releases foram censuradas no dataset. Os pares e a exclusão constam de `pares.csv` e `exclusoes.csv`. Esta análise usa o CFR (b) calculado com a v1 e deve ser interpretada considerando sua precisão de 0,3755 e seu F1 de 0,5385 na validação (#34). Os refinamentos não foram aplicados por restrição de prazo (Seção 2.7).
 
 As figuras apresentam a frequência em releases/semana em escala logarítmica (todas as frequências são positivas) e o CFR em percentual. A transformação é apenas visual: Spearman usa os postos dos valores originais.
 
@@ -111,7 +111,7 @@ A tabela seguinte seleciona descritivas para confrontar as hipóteses. Cada cél
 | Idade | Q3 | 0,29 (0,32) | 341,28 (805,42) |
 | Idade | Q4 | 0,21 (0,25) | 793,12 (2014,69) |
 
-Na recuperação, os fatores numéricos usam 272 repositórios e o tipo de projeto usa 57; os demais não possuem valor da métrica. CFR (b) usa 299 nos fatores numéricos e 60 por tipo. Nenhum grupo usado no teste ficou com menos de cinco observações. As exclusões são registradas por fator × métrica em `exclusoes.csv`, sem imputação. As associações que usam CFR (b) são provisórias até a validação da #34.
+Na recuperação, os fatores numéricos usam 272 repositórios e o tipo de projeto usa 57; os demais não possuem valor da métrica. CFR (b) usa 299 nos fatores numéricos e 60 por tipo. Nenhum grupo usado no teste ficou com menos de cinco observações. As exclusões são registradas por fator × métrica em `exclusoes.csv`, sem imputação. As associações que usam CFR (b) refletem a v1, com F1 de 0,5385 na validação (#34); a baixa precisão da heurística limita sua interpretação. Por restrição de prazo, os refinamentos não foram incorporados às análises.
 
 ## 3.8 RQ 07: sensibilidade à definição operacional
 

@@ -11,7 +11,7 @@ python -m analises.rq05 --entrada output/metricas_repos.csv \
 
 As estimativas, pares, exclusões e figuras ficam em [`output/analises/rq05/`](../output/analises/rq05/); o relatório registra o hash da entrada e a versão do SciPy. A documentação do comando e das unidades está em [`analises/rq05.md`](../analises/rq05.md).
 
-A execução com dados reais não encerra a validação do CFR (b). Falta incorporar a precisão, recall e F1 da #34, que depende dos arquivos `releases.csv` e `commits.csv` da coleta original. Nenhum achado de validação foi inventado. Após eventual refinamento da heurística e regeneração do dataset, a RQ05 deve ser executada novamente.
+A RQ05 apresentada usa o dataset calculado com a **v1**. A validação da #34 obteve precisão de 0,3755, recall de 0,9515 e F1 de 0,5385 para essa versão. A v3 atingiu F1 de 0,7042 somente na amostra-ouro. Por restrição de prazo, o grupo mantém o dataset e as análises existentes: aplicar v2 ou v3 exigiria recalcular o CFR (b), regenerar o dataset e reexecutar e revisar as análises afetadas, sem tempo disponível antes da entrega. Os resultados da RQ05 devem ser interpretados com a limitação da v1; o F1 da v3 não se aplica a eles.
 
 ## Conferência para a integração ao artigo
 
@@ -24,6 +24,6 @@ A conferência também cobriu as tabelas e afirmações da RQ06 contra
 `output/analises/rq06/testes.csv` e `descritivas.csv`, incluindo a família de
 24 testes, 13 p-valores brutos abaixo de 0,05 e 8 após Holm. As hipóteses
 originais não foram alteradas. A ausência de significância não foi tratada
-como prova de equivalência entre grupos. A revisão cruzada do grupo e a
-validação do CFR (b) continuam pendentes; esta entrega registra a parte de
+como prova de equivalência entre grupos. A revisão cruzada do grupo continua pendente. A validação da #34 está
+registrada, com a limitação da v1 explicitada acima; esta entrega registra a parte de
 RQ05 e RQ06 do integrante B na #51.
