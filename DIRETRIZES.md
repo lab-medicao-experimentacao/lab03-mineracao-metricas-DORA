@@ -113,7 +113,7 @@ após concluírem a rotulagem independente.
 │   ├── conftest.py            # fixtures compartilhadas
 │   ├── test_frequencia.py, test_classificacao.py, ...
 │   └── pipeline/              # testes do pipeline com respostas HTTP mockadas
-├── data/                      # NÃO versionado (exceto .gitkeep)
+├── data/                      # cache/ NÃO versionado; processed/ versionado, exceto commits.csv (1,1 GB > limite de 100 MB do GitHub)
 │   ├── cache/                 # respostas cruas da API
 │   └── processed/             # CSVs intermediários
 ├── output/                    # versionado: funil.csv, repos.csv, dicionário de dados
@@ -403,7 +403,7 @@ pytest --cov=metricas --cov-fail-under=80             # antes de qualquer PR
   feat(selecao): fatia busca por faixas de estrelas (#3)
   test(classificacao): casos de limite das faixas DORA (#6)
   ```
-- PR com `Closes #N` na descrição, descrição do que foi testado, e sem arquivos de `data/`.
+- PR com `Closes #N` na descrição, descrição do que foi testado, e sem arquivos de `data/cache/` nem o `data/processed/commits.csv`.
 - Commits pequenos e frequentes (a correção avalia a evolução semanal).
 - Merge do PR por **squash** (`gh pr merge --squash`). O título do PR vira o commit na `main`, então ele também leva `(#N)`.
 
@@ -445,7 +445,7 @@ Ao trabalhar neste repositório, a IA deve:
 - [ ] Código segue a estrutura e os contratos deste documento
 - [ ] Testes escritos e passando localmente e no CI
 - [ ] Cobertura de `metricas/` ≥ 80 %
-- [ ] Sem segredo, sem dados de `data/` no commit
+- [ ] Sem segredo, sem `data/cache/` nem `data/processed/commits.csv` no commit
 - [ ] Commits referenciam a Issue; PR com `Closes #N` revisado por outro integrante
 - [ ] README / dicionário de dados atualizados se algo novo for gerado
 - [ ] Cartão movido para Done no Projects

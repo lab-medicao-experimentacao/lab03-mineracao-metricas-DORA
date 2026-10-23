@@ -219,7 +219,8 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Lab03 — dados coletados (cache da API e intermediários) não são versionados
-data/**
-!data/**/
-!data/**/.gitkeep
+# Lab03 — o cache da API não é versionado; data/processed é, exceto o commits.csv
+# (1,1 GB, acima do limite de 100 MB por arquivo do GitHub; regenerado a partir do cache)
+data/cache/*
+!data/cache/.gitkeep
+data/processed/commits.csv
