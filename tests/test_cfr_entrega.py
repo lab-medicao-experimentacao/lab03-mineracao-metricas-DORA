@@ -27,7 +27,13 @@ def release(tag, dia, **campos):
     ("v2.3.0", "v3.3.1", False),
     ("v2.3.0", "v2.3.1-rc.1", False),
     ("v02.3.0", "v02.3.1", False),
-    ("package@2.3.0", "package@2.3.1", False),
+    ("package@2.3.0", "package@2.3.1", True),
+    ("@scope/package@2.3.0", "@scope/package@2.3.1", True),
+    ("release-2.3.0", "release-2.3.1", True),
+    ("s3ql-2.3.0", "s3ql-2.3.1", True),
+    ("a@2.3.0", "b@2.3.1", False),
+    ("a/v2.3.0", "a/v2.3.1", True),
+    ("a@2.3.0", "a@2.3.1-rc.1", False),
     ("v2.3.0", "v2.3.1+", False),
     ("v2.3", "v2.3.1", False),
 ])
@@ -37,7 +43,7 @@ def test_versoes(anterior, atual, esperado):
 
 @pytest.mark.parametrize("mensagem", [
     "fix: crash ao abrir arquivo", "Revert change", "HOTFIX: timeout",
-    "feat: novo comando\n\nfix(parser): erro de leitura",
+    "Fixed parser crash", "Fixes invalid response", "bugfix: timeout",
 ])
 def test_mensagem_corretiva_independe_da_versao(mensagem):
     assert release_corretiva(release("release-b", 2), None, [{"message": mensagem}])
@@ -46,6 +52,47 @@ def test_mensagem_corretiva_independe_da_versao(mensagem):
 @pytest.mark.parametrize("mensagem", ["prefix: exemplo", "fixture nova", "feat: add feature", ""])
 def test_nao_confunde_substrings(mensagem):
     assert not release_corretiva(release("release-b", 2), None, [{"message": mensagem}])
+
+
+@pytest.mark.parametrize("mensagens, esperado", [
+    (["fix: crash", "feat: novo comando", "feat: nova API"], False),
+    (["fix: crash", "feat: novo comando"], False),
+    (["fix: crash", "fix: regressão", "feat: novo comando"], True),
+    (["feat: novo comando\n\nfix: texto de uma alteração anterior"], False),
+    (["Merge pull request #1 from org/fix/crash", "feat: novo comando"], False),
+    (["fix: crash", "Merge pull request #1", "chore: release", "docs: exemplo"], True),
+    (["fix(deps): bump pacote", "Fix typo", "ci: fix build"], False),
+    (["", "  \n  "], False),
+])
+def test_objetivo_principal_exige_maioria_de_correcoes_informativas(mensagens, esperado):
+    # Mesmo uma tag patch não supera evidência de release mista ou manutenção.
+    commits = [{"message": m} for m in mensagens]
+    assert release_corretiva(release("v1.0.1", 2), release("v1.0.0", 0), commits) is esperado
+
+
+def test_refinamento_nao_muta_commits_ou_releases():
+    entrada = (release("v1.0.1", 2), release("v1.0.0", 0),
+               [{"message": "fix: crash"}, {"message": "chore: release"}])
+    copia = deepcopy(entrada)
+    assert release_corretiva(*entrada)
+    assert entrada == copia
+
+
+def test_patch_com_mudanca_sem_funcionalidade_explicita():
+    assert release_corretiva(release("v1.0.1", 2), release("v1.0.0", 0),
+                             [{"message": "Handle stale connection"}])
+    assert not release_corretiva(release("v1.1.0", 2), release("v1.0.0", 0),
+                                 [{"message": "Handle stale connection"}])
+
+
+def test_correcao_com_titulos_neutros_sem_funcionalidade():
+    assert release_corretiva(release("custom", 2), None,
+                             [{"message": "fix: crash"}, {"message": "Simplify parser"}])
+
+
+def test_palavra_add_dentro_de_correcao_nao_vota_como_funcionalidade():
+    assert release_corretiva(release("custom", 2), None,
+                             [{"message": "fix: add missing error check"}])
 
 
 def test_sem_anterior_ou_commits_nao_inventa_correcao():

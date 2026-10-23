@@ -5,12 +5,12 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
-import io
 import json
 import logging
 import re
 import sys
 import tempfile
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -42,23 +42,32 @@ class ErroValidacao(ValueError):
     """Entrada incompleta, inválida ou tentativa de sobrescrever uma versão."""
 
 
-def _tabela(caminho: Path, colunas: tuple[str, ...], permitir_vazia: bool = False) -> list[dict]:
+def _linhas_tabela(caminho: Path, colunas: tuple[str, ...],
+                   permitir_vazia: bool = False) -> Iterator[dict]:
+    """Lê CSV em fluxo, sem carregar os commits de toda a amostra na memória."""
     try:
-        texto = caminho.read_text(encoding="utf-8-sig")
+        with caminho.open(encoding="utf-8-sig", newline="") as arquivo:
+            cabecalho = arquivo.readline()
+            separador = ";" if cabecalho.count(";") > cabecalho.count(",") else ","
+            arquivo.seek(0)
+            leitor = csv.DictReader(arquivo, delimiter=separador)
+            campos = leitor.fieldnames or []
+            if len(set(campos)) != len(campos) or not set(colunas) <= set(campos):
+                raise ErroValidacao(f"{caminho.name}: cabeçalho inválido; esperado: {', '.join(colunas)}")
+            tem_itens = False
+            for linha in leitor:
+                if None in linha or any(v is None for v in linha.values()):
+                    raise ErroValidacao(f"{caminho.name}: linha com quantidade incorreta de campos")
+                tem_itens = True
+                yield linha
+            if not tem_itens and not permitir_vazia:
+                raise ErroValidacao(f"{caminho.name}: arquivo sem itens")
     except (OSError, UnicodeError) as erro:
         raise ErroValidacao(f"não foi possível ler {caminho}: {erro}") from erro
-    cabecalho = texto.splitlines()[0] if texto else ""
-    separador = ";" if cabecalho.count(";") > cabecalho.count(",") else ","
-    leitor = csv.DictReader(io.StringIO(texto, newline=""), delimiter=separador)
-    campos = leitor.fieldnames or []
-    if len(set(campos)) != len(campos) or not set(colunas) <= set(campos):
-        raise ErroValidacao(f"{caminho.name}: cabeçalho inválido; esperado: {', '.join(colunas)}")
-    linhas = list(leitor)
-    if not linhas and not permitir_vazia:
-        raise ErroValidacao(f"{caminho.name}: arquivo sem itens")
-    if any(None in linha or any(v is None for v in linha.values()) for linha in linhas):
-        raise ErroValidacao(f"{caminho.name}: linha com quantidade incorreta de campos")
-    return linhas
+
+
+def _tabela(caminho: Path, colunas: tuple[str, ...], permitir_vazia: bool = False) -> list[dict]:
+    return list(_linhas_tabela(caminho, colunas, permitir_vazia))
 
 
 def _chave(linha: dict, tipo: str) -> tuple[str, str]:
@@ -134,7 +143,7 @@ def _entradas(config: Config, rotulos: list[dict]) -> tuple[dict, dict]:
         historico.sort(key=lambda r: (r["published_at"] is None,
                                       r["published_at"] or config.janela.fim, r["tag_name"]))
     colunas = ("full_name", "tag_name", "sha", "author_date", "message")
-    for linha in _tabela(config.dir_processados / "commits.csv", colunas, permitir_vazia=True):
+    for linha in _linhas_tabela(config.dir_processados / "commits.csv", colunas, permitir_vazia=True):
         if linha["full_name"] in repos:
             commits[linha["full_name"]].setdefault(linha["tag_name"], []).append(
                 {"sha": linha["sha"], "message": linha["message"]})

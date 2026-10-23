@@ -15,29 +15,71 @@ _SEMVER = re.compile(
     rf"v?{_NUMERO}\.{_NUMERO}\.{_NUMERO}"
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
 )
-_MENSAGEM_CORRETIVA = re.compile(r"\b(?:revert|hotfix|fix)\b", re.IGNORECASE)
+_MENSAGEM_CORRETIVA = re.compile(r"\b(?:revert(?:s|ed)?|hotfix|bugfix|fix(?:es|ed)?)\b", re.IGNORECASE)
+_MANUTENCAO = re.compile(
+    r"^(?:merge\b|(?:chore|build|ci|docs?|test|style)(?:\([^)]*\))?!?:|"
+    r"bump\b|(?:update|upgrade) (?:dependency|dependencies|translations?|readme)\b|"
+    r"(?:release|released|prepare release|next development version|automatic translations|"
+    r"version bump|increment version|set version|version|cutting new release)\b|"
+    r"update (?:changelog|docs?|ci|release)\b|"
+    r"`?v?\d+\.\d+\.\d+\b)", re.IGNORECASE,
+)
+_CORRECAO_MANUTENCAO = re.compile(
+    r"\b(?:typos?|spelling|readme|docs?|documentation|translations?)\b|"
+    r"^(?:fix|bugfix)\((?:deps|deps-dev|ci|build|docs?|test)\):", re.IGNORECASE,
+)
+_FUNCIONALIDADE = re.compile(
+    r"\b(?:feat|features?|add(?:s|ed)?|introduc(?:e|es|ed)|new|support)\b", re.IGNORECASE,
+)
+_TAG_COM_PACOTE = re.compile(
+    rf"(?P<prefixo>.*[/@-])(?P<versao>v?{_NUMERO}\.{_NUMERO}\.{_NUMERO}"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)"
+)
+
+
+def _versao_tag(tag: str) -> tuple[str, tuple[int, ...]] | None:
+    """Separa namespace e SemVer; só compara tags do mesmo namespace."""
+    simples = _SEMVER.fullmatch(tag)
+    if simples:
+        return "", tuple(map(int, simples.groups()))
+    composta = _TAG_COM_PACOTE.fullmatch(tag)
+    if composta:
+        versao = _SEMVER.fullmatch(composta["versao"])
+        return composta["prefixo"], tuple(map(int, versao.groups()))
+    return None
 
 
 def release_corretiva(release: dict, anterior: dict | None, commits: list[dict]) -> bool:
-    """Identifica uma release corretiva (booleano); heurística inicial da #28.
+    """Identifica uma release corretiva (booleano); refinamento v3 da #34.
 
-    Apenas releases principais publicadas. Detecta aumento de patch mantendo
-    major/minor em tags SemVer estáveis (prefixo v e build opcionais), OU uma
-    palavra inteira fix/revert/hotfix, sem distinção de caixa, nas mensagens.
-    Tags de outros formatos dependem apenas das mensagens disponíveis.
-    Sem antecessora, só as mensagens podem indicar correção.
+    Apenas releases principais publicadas. Usa o título de cada commit;
+    merges e manutenção explícita (documentação, dependências, CI, testes,
+    publicação e tradução) não votam. Exige maioria estrita de títulos com
+    fix/fixes/fixed, bugfix, hotfix ou revert/reverts/reverted nas mudanças
+    restantes quando há funcionalidades explícitas (feat/add/new/support).
+    Sem funcionalidades explícitas, basta um título corretivo ou aumento de
+    patch SemVer no mesmo namespace, inclusive tags com prefixo de pacote.
+    Sem commits, usa apenas patch; só manutenção não é correção.
+    Não consulta rótulos, repositórios específicos, rede ou disco.
     """
     if release["draft"] or release["prerelease"] or release["published_at"] is None:
         return False
-    if any(_MENSAGEM_CORRETIVA.search(c["message"]) for c in commits):
-        return True
-    atual = _SEMVER.fullmatch(release["tag_name"])
-    previa = _SEMVER.fullmatch(anterior["tag_name"]) if anterior is not None else None
-    if atual is None or previa is None:
-        return False
-    versao = tuple(map(int, atual.groups()))
-    base = tuple(map(int, previa.groups()))
-    return versao[:2] == base[:2] and versao[2] > base[2]
+    atual = _versao_tag(release["tag_name"])
+    previa = _versao_tag(anterior["tag_name"]) if anterior is not None else None
+    patch = bool(atual and previa and atual[0] == previa[0]
+                 and atual[1][:2] == previa[1][:2] and atual[1][2] > previa[1][2])
+    if commits:
+        titulos = [c["message"].strip().splitlines()[0] if c["message"].strip() else ""
+                   for c in commits]
+        informativos = [t for t in titulos if t and not _MANUTENCAO.search(t)
+                        and not _CORRECAO_MANUTENCAO.search(t)]
+        n_correcoes = sum(bool(_MENSAGEM_CORRETIVA.search(t)) for t in informativos)
+        tem_funcionalidade = any(_FUNCIONALIDADE.search(t) and not _MENSAGEM_CORRETIVA.search(t)
+                                for t in informativos)
+        if tem_funcionalidade:
+            return n_correcoes > len(informativos) / 2
+        return bool(informativos) and (n_correcoes > 0 or patch)
+    return patch
 
 
 def cfr_entrega(

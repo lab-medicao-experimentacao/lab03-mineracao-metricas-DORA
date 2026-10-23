@@ -192,6 +192,37 @@ def test_sem_commits_ainda_avalia_e_contabiliza_limitacao(ambiente):
     assert resultado["n_itens"] == 3
 
 
+def test_commits_lidos_em_fluxo_preservam_mensagens_multilinha(ambiente, monkeypatch):
+    caminho = ambiente.dir_processados / "commits.csv"
+    linhas = ler(caminho)
+    linhas[0]["message"] = 'fix: comando, com "aspas"\n\nDetalhes da correção'
+    linhas.append({**linhas[0], "full_name": "org/fora-do-sorteio"})
+    gravar_csv(caminho, COLUNAS_COMMITS, linhas)
+    original = Path.read_text
+
+    def leitura_inteira_proibida(self, *args, **kwargs):
+        if self == caminho:
+            pytest.fail("commits.csv não deve ser carregado inteiro na memória")
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", leitura_inteira_proibida)
+    resultado = avaliar(ambiente)
+    assert resultado["fp"] == 1
+    assert resultado["n_itens"] == 3
+    rotulos = modulo._consenso_completo(ambiente.dir_saida / "amostra_ouro")
+    _, commits = modulo._entradas(ambiente, rotulos)
+    assert set(commits) == {"org/exemplo"}
+    assert commits["org/exemplo"]["v1.1.0"][0]["message"] == linhas[0]["message"]
+
+
+@pytest.mark.parametrize("conteudo", ["a,b\n1\n", "a,b\n1,2,3\n"])
+def test_leitura_em_fluxo_recusa_linhas_com_campos_incorretos(tmp_path, conteudo):
+    caminho = tmp_path / "commits.csv"
+    caminho.write_text(conteudo, encoding="utf-8")
+    with pytest.raises(modulo.ErroValidacao, match="quantidade incorreta"):
+        list(modulo._linhas_tabela(caminho, ("a", "b")))
+
+
 def test_releases_coletadas_duplicadas(ambiente):
     caminho = ambiente.dir_processados / "releases.csv"
     linhas = ler(caminho)

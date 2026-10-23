@@ -355,6 +355,35 @@ automática com as decisões humanas:
 python -m pipeline.validacao_heuristica --config config.yaml --versao v1 --descricao "Versão inicial"
 ```
 
+Esse exemplo inicia um histórico novo. O histórico S02 já contém `v1`, `v2` e
+`v3`; para reproduzir a versão final com o código atual, use o comando exato
+abaixo, mantendo a descrição registrada:
+
+```bash
+gh release download commits-s02 --pattern commits-s02.csv.gz --dir /tmp
+gunzip -c /tmp/commits-s02.csv.gz > data/processed/commits.csv
+python -m pipeline.validacao_heuristica --config config.yaml --versao v3 --descricao "Distingue funcionalidades explícitas: exige maioria corretiva em releases mistas; sem funcionalidades usa título corretivo ou patch no mesmo namespace; amplia identificação de manutenção e tags prefixadas."
+```
+
+O download exige o GitHub CLI (`gh`). O CSV descompactado ocupa cerca de 1,2 GB,
+é ignorado pelo Git e é lido em fluxo durante a avaliação. Os resultados S02
+estão no [relatório de validação](output/validacao_heuristica/relatorio.md):
+
+| Versão | Precisão | Recall | F1 | Situação |
+|---|---:|---:|---:|---|
+| v1 | 0,3755 | 0,9515 | 0,5385 | Refinada |
+| v2 | 0,6667 | 0,4466 | 0,5349 | Refinada |
+| v3 | 0,6818 | 0,7282 | 0,7042 | Meta atingida |
+
+A v3 usa os títulos dos commits, exclui merges e manutenção explícita e exige
+maioria corretiva quando há funcionalidades explícitas. Sem funcionalidades,
+aceita um título corretivo ou aumento de patch SemVer no mesmo namespace;
+sem commits, usa apenas o patch. Releases só de manutenção não são corretivas.
+As regras e limitações estão na [metodologia](artigo/02-metodologia.md).
+O refinamento usou a mesma amostra da avaliação, portanto o resultado pode ser
+otimista para outros projetos. Após adotar a v3, regenere o dataset e as análises
+que usam CFR (b), pois resultados gerados com a v1 não incorporam o refinamento.
+
 O comando funciona sem token e sem rede. Ele lê os sorteios, as seis planilhas e
 os dois arquivos de consenso em `output/amostra_ouro/`, além de `releases.csv` e
 `commits.csv` em `data/processed/`. Os diretórios seguem os caminhos do

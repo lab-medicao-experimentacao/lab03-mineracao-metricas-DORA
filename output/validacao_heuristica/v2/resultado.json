@@ -1,0 +1,23 @@
+{
+  "codigo_sha256": "ae51abb7172638afd91eb09b61ea913329e94019cdb0e4fdd0c73aea625ee8f9",
+  "dados_sha256": "889238774c7ee9468bcb86c8f245b72ba47bdb0b9b6a4b626f82a54daf5cdeb5",
+  "descricao": "Maioria estrita de títulos corretivos entre commits informativos; exclui merges e manutenção explícita; patch SemVer apenas sem commits.",
+  "f1": 0.5348837209302325,
+  "f1_minimo": 0.7,
+  "fn": 57,
+  "fp": 23,
+  "janela_fim_exclusivo": "2026-10-01T00:00:00+00:00",
+  "janela_inicio": "2025-10-01T00:00:00+00:00",
+  "n_corretivas_previstas": 69,
+  "n_corretivas_reais": 103,
+  "n_itens": 300,
+  "n_repositorios": 60,
+  "n_sem_commits": 17,
+  "precisao": 0.6666666666666666,
+  "recall": 0.44660194174757284,
+  "scikit_learn": "1.5.2",
+  "situacao": "refinar",
+  "versao": "v2",
+  "vn": 174,
+  "vp": 46
+}

@@ -1,0 +1,23 @@
+{
+  "codigo_sha256": "267b3683c3684905b8a0cb8bb6fa4e5f1b35239326f0b2de369d73acd594b6c1",
+  "dados_sha256": "889238774c7ee9468bcb86c8f245b72ba47bdb0b9b6a4b626f82a54daf5cdeb5",
+  "descricao": "Distingue funcionalidades explícitas: exige maioria corretiva em releases mistas; sem funcionalidades usa título corretivo ou patch no mesmo namespace; amplia identificação de manutenção e tags prefixadas.",
+  "f1": 0.704225352112676,
+  "f1_minimo": 0.7,
+  "fn": 28,
+  "fp": 35,
+  "janela_fim_exclusivo": "2026-10-01T00:00:00+00:00",
+  "janela_inicio": "2025-10-01T00:00:00+00:00",
+  "n_corretivas_previstas": 110,
+  "n_corretivas_reais": 103,
+  "n_itens": 300,
+  "n_repositorios": 60,
+  "n_sem_commits": 17,
+  "precisao": 0.6818181818181818,
+  "recall": 0.7281553398058253,
+  "scikit_learn": "1.5.2",
+  "situacao": "atingiu_meta",
+  "versao": "v3",
+  "vn": 162,
+  "vp": 75
+}
