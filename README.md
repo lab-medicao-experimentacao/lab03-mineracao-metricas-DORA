@@ -355,16 +355,8 @@ automática com as decisões humanas:
 python -m pipeline.validacao_heuristica --config config.yaml --versao nova_avaliacao --descricao "Avaliação do código atual (v3)"
 ```
 
-Esse exemplo registra uma nova avaliação do código atual (v3); não reproduz
-a v1 usada no estudo. O histórico S02 já contém `v1`, `v2` e
-`v3`. **O dataset e as análises desta entrega usam a v1.** Por restrição de
-prazo, v2 e v3 ficam como experimentos de validação: adotá-las exigiria
-recalcular o CFR (b), regenerar o dataset, reexecutar as análises afetadas e
-revisar o artigo, sem tempo disponível antes da entrega. A v1 teve F1 de
-0,5385, abaixo da meta; o F1 de 0,7042 da v3 não se aplica aos resultados
-existentes.
-
-O código atual implementa a v3; para reproduzir **apenas sua avaliação**, use o comando exato
+Esse exemplo registra uma nova avaliação da v3 com um identificador livre. O histórico S02 já contém `v1`, `v2` e
+`v3`; para reproduzir a versão final com o código atual, use o comando exato
 abaixo, mantendo a descrição registrada:
 
 ```bash
@@ -389,12 +381,10 @@ aceita um título corretivo ou aumento de patch SemVer no mesmo namespace;
 sem commits, usa apenas o patch. Releases só de manutenção não são corretivas.
 As regras e limitações estão na [metodologia](artigo/02-metodologia.md).
 O refinamento usou a mesma amostra da avaliação, portanto o resultado pode ser
-otimista para outros projetos. Nesta entrega, preserve o dataset e as análises
-existentes com a **v1**. A implementação exata da v1 está preservada em
-[`v1/codigo.json`](output/validacao_heuristica/v1/codigo.json), no campo `cfr`.
-Executar a geração do dataset com o código atual usaria a v3 e produziria
-resultados de outra versão; os números apresentados no artigo continuam sendo
-os da v1, com sua limitação de precisão documentada.
+otimista para outros projetos. **O dataset e as análises desta entrega foram
+regenerados com a v3**, usando os arquivos locais da coleta. O registro da
+[atualização do dataset](output/atualizacao_dataset_v3.md) identifica a versão,
+os comandos, os hashes e as diferenças em relação à v1.
 
 O comando funciona sem token e sem rede. Ele lê os sorteios, as seis planilhas e
 os dois arquivos de consenso em `output/amostra_ouro/`, além de `releases.csv` e
@@ -611,10 +601,10 @@ Os nomes das colunas podem ser configurados por argumentos, conforme o
 dataset entregue pelo integrante C.
 
 Veja [instruções, unidades e dicionário das saídas da RQ05](analises/rq05.md).
-O CFR (b) desta análise usa a v1, cuja validação na #34 obteve F1 de 0,5385.
-Os refinamentos v2 e v3 não foram aplicados por restrição de prazo, conforme
-a [metodologia](artigo/02-metodologia.md). O
-[relatório da análise](output/analises/rq05/relatorio.md) preserva a execução original. As saídas ficam em
+A análise usa o dataset regenerado com a v3, validada na #34 (F1 = 0,7042).
+O [relatório da análise](output/analises/rq05/relatorio.md) registra os valores
+recalculados; a interpretação considera as limitações da validação na
+[metodologia](artigo/02-metodologia.md). As saídas ficam em
 [`output/analises/rq05/`](output/analises/rq05/).
 
 ## S03 — RQ06: características associadas ao desempenho
@@ -629,8 +619,8 @@ python -m analises.rq06 --entrada output/metricas_repos.csv --saida output/anali
 O comando gera descritivas por grupo, testes de Kruskal-Wallis ou Mann-Whitney,
 correção global de Holm, tamanhos de efeito, exclusões e relatório. O tipo de
 projeto usa somente os 60 repositórios com consenso humano. A interpretação
-do CFR (b) considera a baixa precisão da v1 (0,3755); v2 e v3 foram avaliadas
-posteriormente e não integram estes resultados por restrição de prazo.
+do CFR (b) considera a validação da v3 (#34); toda a família de Holm foi
+recalculada com o dataset atualizado.
 
 Veja [método, grupos, unidades e dicionário das saídas](analises/rq06.md).
 Os resultados reais estão em [`output/analises/rq06/`](output/analises/rq06/)

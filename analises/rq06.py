@@ -195,7 +195,7 @@ def gerar_relatorio(tabelas: dict[str, pd.DataFrame], manifesto: dict) -> str:
     linhas = ["# RQ06 — Características associadas ao desempenho DORA", "",
               f"Entrada SHA-256: `{manifesto['entrada_sha256']}`. SciPy {scipy.__version__}; statsmodels {statsmodels.__version__}.", "",
               "Fatores: estrelas, contribuidores, idade e tipo de projeto. As seis variantes são analisadas, "
-              "incluindo CFR (b) com interpretação provisória até a #34. "
+              "incluindo CFR (b), cuja interpretação considera a validação da versão usada no dataset (#34). "
               "Holm usa uma única família de todos os testes calculáveis; α = 0,05. "
               "O mínimo é de cinco observações válidas em cada grupo. "
               "Testes inviáveis ficam sem p-valor ou rejeição, com motivo explícito.", "",
@@ -232,7 +232,8 @@ def gerar_relatorio(tabelas: dict[str, pd.DataFrame], manifesto: dict) -> str:
                "As métricas usam as unidades do dataset (horas, releases/semana e frações). "
                "Diferenças nas distribuições não demonstram causalidade nem que um grupo é superior em todas as métricas. "
                "Grupos pequenos, desbalanceamento, empates, ausências e seleção de projetos populares limitam a inferência. "
-               "Não significância não demonstra equivalência. A validação da heurística de CFR (b) está pendente (#34); "
+               "Não significância não demonstra equivalência. Consulte a validação da versão usada no dataset "
+               "em `output/validacao_heuristica/relatorio.md` (#34) e a metodologia do artigo; "
                "refinamentos exigem regenerar o dataset e repetir toda a família de testes.", "",
                "Fontes: [Kruskal-Wallis](https://docs.scipy.org/doc/scipy-1.14.1/reference/generated/scipy.stats.kruskal.html), "
                "[Mann-Whitney](https://docs.scipy.org/doc/scipy-1.14.1/reference/generated/scipy.stats.mannwhitneyu.html), "
@@ -261,7 +262,7 @@ def executar(entrada: Path, saida: Path) -> dict[str, pd.DataFrame]:
                  "fatores": list(FATORES), "metricas": METRICAS, "alfa": ALFA,
                  "min_por_grupo": MIN_POR_GRUPO, "n_repositorios": len(dados),
                  "n_testes_familia": int((tabelas['testes']['situacao'] == 'calculado').sum()),
-                 "cfr_entrega_validacao": "pendente_issue_34"}
+                 "cfr_entrega_validacao": "consultar_validacao_da_versao_do_dataset_issue_34"}
     saida.mkdir(parents=True, exist_ok=True)
     for nome, tabela in tabelas.items():
         tabela.to_csv(saida / f"{nome}.csv", index=False, lineterminator="\n")

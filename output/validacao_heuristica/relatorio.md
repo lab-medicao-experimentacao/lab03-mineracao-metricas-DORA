@@ -1,7 +1,5 @@
 # Validação da identificação automática de releases corretivas
 
-**Versão usada no estudo: v1.** O dataset, as tabelas, os gráficos e as análises desta entrega foram calculados com a v1 (precisão 0,3755; recall 0,9515; F1 0,5385, abaixo da meta). Por restrição de prazo, v2 e v3 ficam registradas somente como experimentos de validação. Sua adoção exigiria recalcular o CFR (b), regenerar o dataset e as análises afetadas e revisar o artigo, sem tempo disponível antes da entrega. A v3 atingiu a meta na amostra-ouro, mas seu F1 não valida os resultados existentes com a v1. Os registros de cada avaliação abaixo permanecem preservados.
-
 A referência é o consenso humano; a classe positiva é a release corretiva. Precisão, recall e F1 são frações de 0 a 1. Denominadores nulos são registrados como 0.
 
 | Versão | Descrição | Releases | Precisão | Recall | F1 | Meta de F1 | Situação |

@@ -11,7 +11,7 @@ python -m analises.rq05 --entrada output/metricas_repos.csv \
 
 As estimativas, pares, exclusões e figuras ficam em [`output/analises/rq05/`](../output/analises/rq05/); o relatório registra o hash da entrada e a versão do SciPy. A documentação do comando e das unidades está em [`analises/rq05.md`](../analises/rq05.md).
 
-A RQ05 apresentada usa o dataset calculado com a **v1**. A validação da #34 obteve precisão de 0,3755, recall de 0,9515 e F1 de 0,5385 para essa versão. A v3 atingiu F1 de 0,7042 somente na amostra-ouro. Por restrição de prazo, o grupo mantém o dataset e as análises existentes: aplicar v2 ou v3 exigiria recalcular o CFR (b), regenerar o dataset e reexecutar e revisar as análises afetadas, sem tempo disponível antes da entrega. Os resultados da RQ05 devem ser interpretados com a limitação da v1; o F1 da v3 não se aplica a eles.
+O dataset e as análises foram regenerados com a v3, validada na #34 (precisão 0,6818; recall 0,7282; F1 0,7042). Na RQ05, o coeficiente de Spearman para CFR (b) passou de 0,7655 com a v1 para 0,6520 com a v3 (p ≈ 1,4183 × 10⁻³⁷; n = 299). A família completa de Holm da RQ06 também foi recalculada. Os achados devem considerar os erros remanescentes e o uso da mesma amostra-ouro para refinamento e avaliação, conforme a metodologia.
 
 ## Conferência para a integração ao artigo
 
@@ -24,6 +24,6 @@ A conferência também cobriu as tabelas e afirmações da RQ06 contra
 `output/analises/rq06/testes.csv` e `descritivas.csv`, incluindo a família de
 24 testes, 13 p-valores brutos abaixo de 0,05 e 8 após Holm. As hipóteses
 originais não foram alteradas. A ausência de significância não foi tratada
-como prova de equivalência entre grupos. A revisão cruzada do grupo continua pendente. A validação da #34 está
-registrada, com a limitação da v1 explicitada acima; esta entrega registra a parte de
+como prova de equivalência entre grupos. A revisão cruzada do grupo continua pendente; a validação da #34 e sua
+aplicação ao dataset estão registradas. Esta entrega registra a parte de
 RQ05 e RQ06 do integrante B na #51.

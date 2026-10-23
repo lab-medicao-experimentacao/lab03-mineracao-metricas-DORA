@@ -1,4 +1,4 @@
 ﻿par,de,para,n_total,n_comparados,n_excluidos,n_mudaram,prop_mudaram,n_melhoraram,n_pioraram,n_adjacentes,n_saltos,kappa_ponderado,interpretacao
-C1xC2,C1,C2,300,300,0,146,0.486667,27,119,130,16,0.33558,razoável
+C1xC2,C1,C2,300,300,0,125,0.416667,33,92,114,11,0.42186,moderada
 C1xC3,C1,C3,300,300,0,72,0.24,44,28,71,1,0.701154,substancial
-C2xC3,C2,C3,300,300,0,127,0.423333,123,4,122,5,0.443242,moderada
+C2xC3,C2,C3,300,300,0,98,0.326667,91,7,96,2,0.559057,moderada

@@ -1,7 +1,7 @@
 ﻿indicador,valor
 total_repositorios,300
 soma_cfr_b_n_avaliadas,10796
-soma_cfr_b_n_falharam,7131
+soma_cfr_b_n_falharam,4979
 soma_cfr_b_n_censuradas,292
 repos_sem_contagem_cfr_b,0
 soma_recuperacao_n_episodios,9862

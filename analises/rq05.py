@@ -164,7 +164,8 @@ def gerar_relatorio(resumo: pd.DataFrame, sha256: str, colunas: tuple, escala: s
         "relações não monotônicas. Nenhum desses resultados estabelece causalidade.", "",
         "O CFR (a) mede falhas de CI; o CFR (b) usa releases corretivas como proxy de "
         "falhas de entrega. Versionamento e cadência de correções podem afetar o segundo. "
-        "A interpretação de CFR (b) precisa incorporar a validação da #34. "
+        "A interpretação de CFR (b) deve considerar a validação da versão usada no dataset "
+        "(#34; veja `output/validacao_heuristica/relatorio.md` e a metodologia do artigo). "
         "Esses proxies não comprovam, por si só, a afirmação DORA sobre produção.", "",
         "## Exclusões e limites", "",
         "Os pares completos são selecionados separadamente por variante, sem imputação. "

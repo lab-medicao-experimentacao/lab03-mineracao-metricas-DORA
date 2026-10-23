@@ -8,7 +8,7 @@
 | RQ02 | lead_time | a | horas | 300 | 0 | 187,51 | 25,71 | 840,06 | 814,35 | 0,00 | 83120,66 |
 | RQ02 | lead_time | b | horas | 300 | 0 | 188,55 | 34,09 | 677,05 | 642,96 | 0,01 | 56327,19 |
 | RQ03 | cfr | a | fração | 300 | 0 | 0,06 (6,05 %) | 0,02 (2,47 %) | 0,14 (14,31 %) | 0,12 (11,83 %) | 0,00 (0,00 %) | 1,00 (100,00 %) |
-| RQ03 | cfr | b | fração | 299 | 1 | 0,40 (40,00 %) | 0,17 (16,67 %) | 0,66 (66,43 %) | 0,50 (49,77 %) | 0,00 (0,00 %) | 1,00 (100,00 %) |
+| RQ03 | cfr | b | fração | 299 | 1 | 0,20 (20,00 %) | 0,00 (0,00 %) | 0,45 (45,31 %) | 0,45 (45,31 %) | 0,00 (0,00 %) | 1,00 (100,00 %) |
 | RQ04 | recuperacao | — | horas | 272 | 28 | 4,19 | 0,95 | 21,51 | 20,56 | 0,10 | 3958,31 |
 
 ## Lead time: variante (b) × variante (a)
@@ -33,7 +33,7 @@
 | --- | ---: |
 | Repositórios no dataset | 300 |
 | Releases avaliadas no CFR (b) | 10796 |
-| Releases que falharam no CFR (b) | 7131 |
+| Releases que falharam no CFR (b) | 4979 |
 | Releases censuradas no CFR (b) | 292 |
 | Repositórios sem contagem de releases do CFR (b) | 0 |
 | Episódios de recuperação | 9862 |

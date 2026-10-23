@@ -85,6 +85,12 @@ commit é `R.published_at − commit.author.date`.
 
 Uma release falhou se uma **release corretiva** (`metricas.cfr.release_corretiva`) a seguir em até
 7 dias. Releases publicadas nos últimos 7 dias da janela são **censuradas** e ficam fora do denominador.
+O dataset atual foi regenerado com a **v3** da heurística (#34): usa títulos dos commits,
+exclui merges e manutenção explícita e exige maioria corretiva quando há funcionalidades
+explícitas. Sem elas, aceita título corretivo ou aumento de patch SemVer no mesmo namespace;
+sem commits, usa apenas o patch. Somente manutenção não é correção. A validação obteve
+precisão 0,6818, recall 0,7282 e F1 0,7042 na amostra-ouro. Veja a
+[metodologia](../artigo/02-metodologia.md) e o [registro da atualização](atualizacao_dataset_v3.md).
 
 | Coluna | Tipo | Unidade | Fórmula / origem |
 |---|---|---|---|

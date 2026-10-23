@@ -1,6 +1,6 @@
 {
-  "entrada_sha256": "d24f38c59e5d36f229130a1ae6542f519889d11a69f8fcebb46cd10f95b8c81c",
-  "codigo_sha256": "2a2e9c2257fc560781f764c282a25261634692ae7eb5f407d0f6a7b5cb7c91d7",
+  "entrada_sha256": "a10317d0576780d6321fbe8ad9475b27c7b227f827c9eef69aa1e3e491e30f22",
+  "codigo_sha256": "87d4d4caddda79929b75cc4580637803e4ecd918d1861b17cc38dd8baa0b81c4",
   "scipy": "1.14.1",
   "statsmodels": "0.14.4",
   "pandas": "2.2.3",
@@ -23,5 +23,5 @@
   "min_por_grupo": 5,
   "n_repositorios": 300,
   "n_testes_familia": 24,
-  "cfr_entrega_validacao": "pendente_issue_34"
+  "cfr_entrega_validacao": "consultar_validacao_da_versao_do_dataset_issue_34"
 }

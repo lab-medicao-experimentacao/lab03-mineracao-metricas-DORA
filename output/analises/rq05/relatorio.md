@@ -1,6 +1,6 @@
 # RQ05 — Frequência de deploy × taxa de falha
 
-SHA-256 do CSV de entrada: `d24f38c59e5d36f229130a1ae6542f519889d11a69f8fcebb46cd10f95b8c81c`.
+SHA-256 do CSV de entrada: `a10317d0576780d6321fbe8ad9475b27c7b227f827c9eef69aa1e3e491e30f22`.
 
 Colunas (repositório, frequência, CFR a, CFR b): `full_name, frequencia_semana, cfr_ci, cfr_entrega`.
 SciPy: 1.14.1. Teste bilateral `scipy.stats.spearmanr`.
@@ -8,19 +8,19 @@ SciPy: 1.14.1. Teste bilateral `scipy.stats.spearmanr`.
 | Variante | n total | n usado | Excluídos | ρ | p-valor | Situação |
 |---|---:|---:|---:|---:|---:|---|
 | cfr_ci | 300 | 300 | 0 | 0.0585299 | 0.312303 | calculado |
-| cfr_entrega | 300 | 299 | 1 | 0.765456 | 8.25886e-59 | calculado |
+| cfr_entrega | 300 | 299 | 1 | 0.651975 | 1.41826e-37 | calculado |
 
 ## Leitura dos resultados
 
 Para `cfr_ci`, maior frequência acompanhou maior CFR (associação positiva): ρ=0.0585299, p=0.312303, n=300.
 
-Para `cfr_entrega`, maior frequência acompanhou maior CFR (associação positiva): ρ=0.765456, p=8.25886e-59, n=299.
+Para `cfr_entrega`, maior frequência acompanhou maior CFR (associação positiva): ρ=0.651975, p=1.41826e-37, n=299.
 
 A hipótese prévia espera associação fraca, possivelmente distinta entre os proxies. Compare a magnitude e o sinal dos dois coeficientes com essa hipótese; o p-valor isolado não mede força de associação. Amostras diferentes por ausência de dados também podem contribuir para diferenças entre os coeficientes.
 
 ρ positivo indica que maior frequência acompanha maior CFR; ρ negativo indica que maior frequência acompanha menor CFR. Um coeficiente próximo de zero indica pouca associação monotônica observada, sem demonstrar ausência de relações não monotônicas. Nenhum desses resultados estabelece causalidade.
 
-O CFR (a) mede falhas de CI; o CFR (b) usa releases corretivas como proxy de falhas de entrega. Versionamento e cadência de correções podem afetar o segundo. A interpretação de CFR (b) precisa incorporar a validação da #34. Esses proxies não comprovam, por si só, a afirmação DORA sobre produção.
+O CFR (a) mede falhas de CI; o CFR (b) usa releases corretivas como proxy de falhas de entrega. Versionamento e cadência de correções podem afetar o segundo. A interpretação de CFR (b) deve considerar a validação da versão usada no dataset (#34; veja `output/validacao_heuristica/relatorio.md` e a metodologia do artigo). Esses proxies não comprovam, por si só, a afirmação DORA sobre produção.
 
 ## Exclusões e limites
 

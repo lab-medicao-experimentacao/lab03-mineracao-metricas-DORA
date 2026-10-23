@@ -175,7 +175,7 @@ def test_execucao_reproduz_arquivos_sem_rede(dados, tmp_path, monkeypatch):
     manifesto = json.loads((saida / 'manifesto.json').read_text())
     assert manifesto['entrada_sha256'] == hashlib.sha256(bruto).hexdigest()
     assert manifesto['n_testes_familia'] == 24
-    assert 'pendente_issue_34' == manifesto['cfr_entrega_validacao']
+    assert 'consultar_validacao_da_versao_do_dataset_issue_34' == manifesto['cfr_entrega_validacao']
     assert 'Medianas e IQR' in (saida / 'relatorio.md').read_text()
 
 

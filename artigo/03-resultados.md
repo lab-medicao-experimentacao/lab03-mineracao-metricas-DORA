@@ -32,11 +32,11 @@ Comparando repositório a repositório, o lead time por commit (b) é menor que 
 | Variante | n | Ausentes | Mediana | Q1 | Q3 | IQR |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | (a) proxy de CI | 300 | 0 | 6,05 % | 2,47 % | 14,31 % | 11,83 % |
-| (b) proxy de entrega | 299 | 1 | 40,00 % | 16,67 % | 66,43 % | 49,77 % |
+| (b) proxy de entrega | 299 | 1 | 20,00 % | 0,00 % | 45,31 % | 45,31 % |
 
-As duas variantes contam histórias diferentes. No proxy de CI (a), a mediana é de 6,05 % de execuções com falha, e 228 repositórios (76,0 %) ficam na faixa Elite (≤ 15 %). No proxy de entrega (b), a mediana é de 40,0 %, e a dispersão é muito maior.
+As duas variantes contam histórias diferentes. No proxy de CI (a), a mediana é de 6,05 % de execuções com falha, e 228 repositórios (76,0 %) ficam na faixa Elite (≤ 15 %). No proxy de entrega (b), a mediana é de 20,0 %, e a dispersão é muito maior.
 
-No CFR (b), foram avaliadas 10.796 releases, das quais 7.131 (66,1 % no agregado) foram seguidas por uma release corretiva em até 7 dias; 292 releases, publicadas nos últimos 7 dias da janela, foram censuradas. Um repositório não tem CFR (b) porque todas as suas releases foram censuradas. Esses valores foram calculados com a **v1**, cuja validação na #34 obteve precisão de 0,3755, recall de 0,9515 e F1 de 0,5385 (abaixo da meta de 0,70). Por restrição de prazo, v2 e v3 não foram aplicadas ao dataset nem às análises desta entrega; o F1 de 0,7042 da v3 refere-se somente ao experimento de validação (Seção 2.7). A Figura `rq03_cfr.png` compara as duas variantes.
+No CFR (b), foram avaliadas 10.796 releases, das quais 4.979 (46,1 % no agregado) foram seguidas por uma release corretiva em até 7 dias; 292 releases, publicadas nos últimos 7 dias da janela, foram censuradas. Um repositório não tem CFR (b) porque todas as suas releases foram censuradas. O dataset foi regenerado com a v3, que obteve precisão de 0,6818, recall de 0,7282 e F1 de 0,7042 na validação da #34 (Seção 2.7). A mediana de CFR (b) caiu de 40,0 % no dataset com a v1 para 20,0 % com a v3; as métricas de CI, frequência, lead time e recuperação permaneceram idênticas. A Figura `rq03_cfr.png` compara as duas variantes.
 
 ## 3.4 RQ 04: tempo de recuperação
 
@@ -69,9 +69,9 @@ A análise usa o dataset de 300 repositórios, com pares completos selecionados 
 | Variante de CFR | n | Excluídos | ρ de Spearman | p-valor aproximado |
 | --- | ---: | ---: | ---: | ---: |
 | (a) proxy de CI | 300 | 0 | 0,0585 | 0,3123 |
-| (b) proxy de entrega | 299 | 1 | 0,7655 | 8,2589 × 10⁻⁵⁹ |
+| (b) proxy de entrega | 299 | 1 | 0,6520 | 1,4183 × 10⁻³⁷ |
 
-Não houve frequência ausente. O repositório `egoist/mygo` foi excluído somente da variante (b), por ausência de CFR de entrega: todas as suas releases foram censuradas no dataset. Os pares e a exclusão constam de `pares.csv` e `exclusoes.csv`. Esta análise usa o CFR (b) calculado com a v1 e deve ser interpretada considerando sua precisão de 0,3755 e seu F1 de 0,5385 na validação (#34). Os refinamentos não foram aplicados por restrição de prazo (Seção 2.7).
+Não houve frequência ausente. O repositório `egoist/mygo` foi excluído somente da variante (b), por ausência de CFR de entrega: todas as suas releases foram censuradas no dataset. Os pares e a exclusão constam de `pares.csv` e `exclusoes.csv`. O CFR (b) foi recalculado com a v3, validada na #34 (F1 = 0,7042). As limitações do refinamento e da avaliação na mesma amostra-ouro são consideradas na discussão.
 
 As figuras apresentam a frequência em releases/semana em escala logarítmica (todas as frequências são positivas) e o CFR em percentual. A transformação é apenas visual: Spearman usa os postos dos valores originais.
 
@@ -90,13 +90,13 @@ A família contém 13 testes com p bruto < 0,05 e 8 após Holm. A tabela apresen
 | Fator | Métrica | n | H | p bruto | p Holm | ε² |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | Estrelas | Lead time (a) | 300 | 14,522 | 0,0023 | 0,0387 | 0,049 |
-| Contribuidores | Lead time (a) | 300 | 70,535 | 3,278e-15 | 7,211e-14 | 0,236 |
+| Contribuidores | Lead time (a) | 300 | 70,535 | 3,278e-15 | 7,539e-14 | 0,236 |
 | Contribuidores | Lead time (b) | 300 | 43,224 | 2,206e-09 | 4,192e-08 | 0,145 |
-| Contribuidores | CFR (b) | 299 | 27,454 | 4,728e-06 | 8,511e-05 | 0,092 |
+| Contribuidores | CFR (b) | 299 | 30,126 | 1,299e-06 | 2,338e-05 | 0,101 |
 | Idade | Frequência | 300 | 44,602 | 1,124e-09 | 2,248e-08 | 0,149 |
 | Idade | Lead time (a) | 300 | 74,217 | 5,333e-16 | 1,280e-14 | 0,248 |
 | Idade | Lead time (b) | 300 | 55,854 | 4,514e-12 | 9,479e-11 | 0,187 |
-| Idade | CFR (b) | 299 | 73,081 | 9,339e-16 | 2,148e-14 | 0,245 |
+| Idade | CFR (b) | 299 | 69,206 | 6,313e-15 | 1,389e-13 | 0,232 |
 
 A tabela seguinte seleciona descritivas para confrontar as hipóteses. Cada célula é mediana (IQR); frequência em releases/semana e lead time em horas. Todos esses grupos têm 75 observações nessas duas métricas. As descritivas completas, com n válido, ausências, Q1 e Q3 de cada grupo e variante, estão em `descritivas.csv` e no relatório.
 
@@ -111,7 +111,7 @@ A tabela seguinte seleciona descritivas para confrontar as hipóteses. Cada cél
 | Idade | Q3 | 0,29 (0,32) | 341,28 (805,42) |
 | Idade | Q4 | 0,21 (0,25) | 793,12 (2014,69) |
 
-Na recuperação, os fatores numéricos usam 272 repositórios e o tipo de projeto usa 57; os demais não possuem valor da métrica. CFR (b) usa 299 nos fatores numéricos e 60 por tipo. Nenhum grupo usado no teste ficou com menos de cinco observações. As exclusões são registradas por fator × métrica em `exclusoes.csv`, sem imputação. As associações que usam CFR (b) refletem a v1, com F1 de 0,5385 na validação (#34); a baixa precisão da heurística limita sua interpretação. Por restrição de prazo, os refinamentos não foram incorporados às análises.
+Na recuperação, os fatores numéricos usam 272 repositórios e o tipo de projeto usa 57; os demais não possuem valor da métrica. CFR (b) usa 299 nos fatores numéricos e 60 por tipo. Nenhum grupo usado no teste ficou com menos de cinco observações. As exclusões são registradas por fator × métrica em `exclusoes.csv`, sem imputação. As associações que usam CFR (b) foram recalculadas com a v3, validada na #34; toda a família de Holm foi reavaliada, inclusive os p-valores corrigidos das outras métricas.
 
 ## 3.8 RQ 07: sensibilidade à definição operacional
 
@@ -125,29 +125,30 @@ As três combinações (C1, C2 e C3, definidas na Seção 2.6) foram comparadas 
 
 | Categoria geral | C1 | C2 | C3 |
 | --- | ---: | ---: | ---: |
-| Elite | 24 (8,00 %) | 4 (1,33 %) | 21 (7,00 %) |
-| High | 126 (42,00 %) | 65 (21,67 %) | 135 (45,00 %) |
-| Medium | 115 (38,33 %) | 188 (62,67 %) | 121 (40,33 %) |
-| Low | 35 (11,67 %) | 43 (14,33 %) | 23 (7,67 %) |
+| Elite | 24 (8,00 %) | 5 (1,67 %) | 21 (7,00 %) |
+| High | 126 (42,00 %) | 89 (29,67 %) | 135 (45,00 %) |
+| Medium | 115 (38,33 %) | 175 (58,33 %) | 121 (40,33 %) |
+| Low | 35 (11,67 %) | 31 (10,33 %) | 23 (7,67 %) |
+| Sem classificação | 0 (0,00 %) | 0 (0,00 %) | 0 (0,00 %) |
 
-| Par | Comparados | Mudaram | Melhoraram | Pioraram | Adjacentes | Saltos | κ ponderado | Interpretação |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| C1 × C2 | 300 | 146 (48,67 %) | 27 | 119 | 130 | 16 | 0,34 | razoável |
-| C1 × C3 | 300 | 72 (24,00 %) | 44 | 28 | 71 | 1 | 0,70 | substancial |
-| C2 × C3 | 300 | 127 (42,33 %) | 123 | 4 | 122 | 5 | 0,44 | moderada |
+| Par | Comparados | Excluídos | Mudaram | Melhoraram | Pioraram | Adjacentes | Saltos | κ ponderado | Interpretação |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| C1 × C2 | 300 | 0 | 125 (41,67 %) | 33 | 92 | 114 | 11 | 0,42 | moderada |
+| C1 × C3 | 300 | 0 | 72 (24,00 %) | 44 | 28 | 71 | 1 | 0,70 | substancial |
+| C2 × C3 | 300 | 0 | 98 (32,67 %) | 91 | 7 | 96 | 2 | 0,56 | moderada |
 
-"Melhoraram" e "pioraram" comparam a categoria da segunda combinação do par com a da primeira. A imensa maioria das mudanças é para uma categoria vizinha: 130 de 146 em C1 × C2, 71 de 72 em C1 × C3 e 122 de 127 em C2 × C3. Os 22 saltos de duas ou mais categorias ocorrem sobretudo entre C1 e C2 (16). As matrizes de transição estão na Figura `transicao_pares.png`, e a distribuição por combinação, na Figura `distribuicao_combinacoes.png`.
+"Melhoraram" e "pioraram" comparam a categoria da segunda combinação do par com a da primeira. A maioria das mudanças é para uma categoria vizinha: 114 de 125 em C1 × C2, 71 de 72 em C1 × C3 e 96 de 98 em C2 × C3. Dos 14 saltos de duas ou mais categorias, 11 ocorrem entre C1 e C2. As matrizes de transição estão na Figura `transicao_pares.png`, e a distribuição por combinação, na Figura `distribuicao_combinacoes.png`.
 
-| Par | Métrica | Mudaram | Melhoraram | Pioraram |
-| --- | --- | ---: | ---: | ---: |
-| C1 × C2 | Frequência | 17 (5,67 %) | 17 | 0 |
-| C1 × C2 | Lead time | 123 (41,00 %) | 65 | 58 |
-| C1 × C2 | CFR | 224 (74,92 %), de 299 | 19 | 205 |
-| C1 × C3 | Frequência | 41 (13,67 %) | 41 | 0 |
-| C1 × C3 | Lead time | 123 (41,00 %) | 65 | 58 |
-| C1 × C3 | CFR | 0 (0,00 %) | 0 | 0 |
-| C2 × C3 | Frequência | 26 (8,67 %) | 26 | 0 |
-| C2 × C3 | Lead time | 0 (0,00 %) | 0 | 0 |
-| C2 × C3 | CFR | 224 (74,92 %), de 299 | 205 | 19 |
+| Par | Métrica | Comparados | Mudaram | Melhoraram | Pioraram |
+| --- | --- | ---: | ---: | ---: | ---: |
+| C1 × C2 | Frequência | 300 | 17 (5,67 %) | 17 | 0 |
+| C1 × C2 | Lead time | 300 | 123 (41,00 %) | 65 | 58 |
+| C1 × C2 | CFR | 299 | 196 (65,55 %) | 37 | 159 |
+| C1 × C3 | Frequência | 300 | 41 (13,67 %) | 41 | 0 |
+| C1 × C3 | Lead time | 300 | 123 (41,00 %) | 65 | 58 |
+| C1 × C3 | CFR | 300 | 0 (0,00 %) | 0 | 0 |
+| C2 × C3 | Frequência | 300 | 26 (8,67 %) | 26 | 0 |
+| C2 × C3 | Lead time | 300 | 0 (0,00 %) | 0 | 0 |
+| C2 × C3 | CFR | 299 | 196 (65,55 %) | 159 | 37 |
 
-A tabela por métrica mostra de onde vem a mudança da categoria geral. A frequência só muda para melhor e em poucos repositórios (5,67 % ao incluir pré-releases e 13,67 % ao usar tags). A troca do lead time por release (a) pelo lead time por commit (b) muda a categoria de 41,00 % dos repositórios, quase metade para cada lado. A troca do CFR de CI (a) pelo CFR de entrega (b) muda a categoria de 74,92 % dos repositórios (299 com CFR (b)), e em 205 deles para pior.
+A tabela por métrica mostra de onde vem a mudança da categoria geral. A frequência só muda para melhor e em poucos repositórios (5,67 % ao incluir pré-releases e 13,67 % ao usar tags). A troca do lead time por release (a) pelo lead time por commit (b) muda a categoria de 41,00 % dos repositórios, quase metade para cada lado. A troca do CFR de CI (a) pelo CFR de entrega (b), calculado com a v3, muda a categoria de 65,55 % dos repositórios (299 com CFR (b)), e em 159 deles para pior.
